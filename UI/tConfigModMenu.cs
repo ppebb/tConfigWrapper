@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -24,7 +25,7 @@ namespace tConfigWrapper.UI {
 	public class TConfigModMenu : UIState {
 		private UIElement uIElement;
 		private UIPanel uIPanel;
-		private UILoaderAnimatedImage uiLoader;
+		public object uiLoader;
 		private bool needToRemoveLoading;
 		private UIList modList;
 		private float modListViewPosition;
@@ -64,9 +65,9 @@ namespace tConfigWrapper.UI {
 			};
 			uIElement.Append(uIPanel);
 
-			uiLoader = new UILoaderAnimatedImage(0.5f, 0.5f, 1f);
-
-			modList.SetScrollbar(uIScrollbar);
+			var uILoaderAnimatedImageCtor = Type.GetType("Terraria.ModLoader.UI.UILoaderAnimatedImage").GetConstructor(new Type[] { typeof(float), typeof(float), typeof(float) });
+			uiLoader = (float)uILoaderAnimatedImageCtor.Invoke(new object[] { 0.5f, 0.5f, 1f });
+			//uiLoader = new UILoaderAnimatedImage(0.5f, 0.5f, 1f);
 
 			var uIHeaderTexTPanel = new UITextPanel<string>(Language.GetTextValue("tModLoader.ModsModsList"), 0.8f, true) {
 				HAlign = 0.5f,
@@ -219,7 +220,7 @@ namespace tConfigWrapper.UI {
 			var anyModNeedsReload = typeof(ConfigManager).GetMethod("AnyModNeedsReload", BindingFlags.Static | BindingFlags.NonPublic);
 			//if (ConfigManager.AnyModNeedsReload()) {
 			if ((bool)anyModNeedsReload.Invoke(null, null)) {
-				Main.menuMode = (int)System.Type.GetType("Terraria.ModLoader.UI.Interface").GetField("reloadModsID", BindingFlags.NonPublic).GetValue(null);
+				Main.menuMode = (int)Type.GetType("Terraria.ModLoader.UI.Interface").GetField("reloadModsID", BindingFlags.NonPublic).GetValue(null);
 				return;
 			}
 			var onChangedAll = typeof(ConfigManager).GetMethod("OnChangedAll", BindingFlags.Static | BindingFlags.NonPublic);
@@ -244,11 +245,11 @@ namespace tConfigWrapper.UI {
 		}
 
 		private static void GotoModPacksMenu(UIMouseEvent evt, UIElement listeningElement) {
-			var menu = System.Type.GetType("Terraria.Modloader.UI.Interface").GetField("modsMenu", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+			var menu = Type.GetType("Terraria.Modloader.UI.Interface").GetField("modsMenu", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
 			var menuLoading = menu.GetType().GetField("loading").GetValue(menu);
 			if (!(bool)menuLoading) {
 				Main.PlaySound(12, -1, -1, 1);
-				Main.menuMode = (int)System.Type.GetType("Terraria.ModLoader.UI.Interface").GetField("modPacksMenuId", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+				Main.menuMode = (int)Type.GetType("Terraria.ModLoader.UI.Interface").GetField("modPacksMenuId", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
 			}
 		}
 
@@ -321,8 +322,8 @@ namespace tConfigWrapper.UI {
 				Rectangle bounds = GetDimensions().ToRectangle();
 				Vector2 stringDimensions = Main.fontMouseText.MeasureString(tooltip);
 				Vector2 vector = Main.MouseScreen + new Vector2(16f);
-				vector.X = System.Math.Min(vector.X, bounds.Right - stringDimensions.X - 16);
-				vector.Y = System.Math.Min(vector.Y, bounds.Bottom - 30);
+				vector.X = Math.Min(vector.X, bounds.Right - stringDimensions.X - 16);
+				vector.Y = Math.Min(vector.Y, bounds.Bottom - 30);
 
 				Rectangle drawDestination = new Rectangle((int)vector.X, (int)vector.Y, (int)stringDimensions.X, (int)stringDimensions.Y);
 				Rectangle backgroundDrawDestination = drawDestination;
@@ -356,9 +357,9 @@ namespace tConfigWrapper.UI {
 
 		internal void Populate() {
 			Task.Factory
-				.StartNew(ModOrganizer.FindMods, _cts.Token)
-				.ContinueWith(task => {
-					var mods = task.Result;
+				.StartNew(() => DoMagicInit(), _cts.Token)
+				.ContinueWith((Task<dynamic> task) => {
+					dynamic mods = task.Result;
 					foreach (var mod in mods) {
 						UIModItem modItem = new UIModItem(mod);
 						modItem.Activate();
@@ -370,8 +371,8 @@ namespace tConfigWrapper.UI {
 				}, _cts.Token, TaskContinuationOptions.None, TaskScheduler.FromCurrentSynchronizationContext());
 		}
 
-		public LocalMod[] DoMagic() {
-			return System.Type.GetType("Terraria.ModLoader.Core.ModOrganizer").GetMethod("FindMods", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null) as LocalMod[];
+		public dynamic DoMagicInit() {
+			return Type.GetType("Terraria.ModLoader.Core.ModOrganizer").GetMethod("FindMods", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
 		}
 	}
 
