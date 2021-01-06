@@ -3,26 +3,33 @@ using Terraria;
 using Terraria.UI;
 using Terraria.ModLoader;
 using SevenZip;
+using System;
 using System.IO;
 using System.Collections.Generic;
 using ReLogic.Graphics;
+using tConfigWrapper.UI;
 
 namespace tConfigWrapper {
 	public class tConfigWrapper : Mod {
-		internal UI.TConfigModMenu test;
-		private UserInterface _test;
+		public static string ModsPath = Main.SavePath + "/tConfigWrapper/Mods";
+		internal TConfigModMenu tCFModMenu;
+		private UserInterface _tCGModMenu;
 		public override void Load() {
-			Directory.CreateDirectory(Main.SavePath + "/tConfigWrapper/Mods/ModSettings");
+			Directory.CreateDirectory(ModsPath + "/ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;
-			test = new UI.TConfigModMenu();
-			test.Activate();
-			_test = new UserInterface();
-			_test.SetState(test);
+			tCFModMenu = new TConfigModMenu();
+			tCFModMenu.Activate();
+			_tCGModMenu = new UserInterface();
+			_tCGModMenu.SetState(tCFModMenu);
+		}
+
+		public override void Unload() {
+			tCFModMenu.Deactivate();
 		}
 
 		public override void UpdateUI(GameTime gameTime) {
-			_test?.Update(gameTime);
+			_tCGModMenu?.Update(gameTime);
 		}
 
 		public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers) {
@@ -31,7 +38,7 @@ namespace tConfigWrapper {
 				layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
 					"tConfigWrapper: A Description",
 					delegate {
-						_test.Draw(Main.spriteBatch, new GameTime());
+						_tCGModMenu.Draw(Main.spriteBatch, new GameTime());
 						return true;
 					},
 					InterfaceScaleType.UI)
@@ -49,7 +56,7 @@ namespace tConfigWrapper {
 		private void Hooks_On_AddMenuButtons(Hooks.Orig_AddMenuButtons orig, Main main, int selectedMenu, string[] buttonNames, float[] buttonScales, ref int offY, ref int spacing, ref int buttonIndex, ref int numButtons) {
 			orig(main, selectedMenu, buttonNames, buttonScales, ref offY, ref spacing, ref buttonIndex, ref numButtons);
 			MenuUtils.AddButton("tConfig Mods", delegate {
-				Main.MenuUI.SetState(test);
+				Main.MenuUI.SetState(tCFModMenu);
 				Main.menuMode = 888;
 			}, selectedMenu, buttonNames, ref buttonIndex, ref numButtons);
 		}
