@@ -2,20 +2,14 @@
 using Microsoft.Xna.Framework.Input;
 using Terraria;
 using Terraria.UI;
-using Terraria.ModLoader;
 using System.Text.RegularExpressions;
 using System.IO;
-using System.Reflection;
-using Gajatko.IniFiles;
 using ReLogic.Graphics;
 using Microsoft.Xna.Framework.Graphics;
-using SevenZip;
 
 namespace tConfigWrapper.UI {
 	public class TConfigModMenu : UIState {
 		public string[] files;
-		public string regFile;
-		private static readonly Regex RemoveFileNameAndPath = new Regex(@"([\s\w]+?)\.obj$", RegexOptions.Compiled);
 		public override void Update(GameTime gameTime) {
 			if (Main.keyState.IsKeyDown(Keys.Escape)) {
 				Main.menuMode = 0;
@@ -28,33 +22,8 @@ namespace tConfigWrapper.UI {
 		public override void Draw(SpriteBatch spriteBatch) {
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
 			for (int i = 0; i < files.Length; i++) {
-				regFile = RemoveFileNameAndPath.Match(files[i]).Groups[1].Value;
-				spriteBatch.DrawString(Main.fontMouseText, regFile, new Vector2(50, 10 + (i * 20)), Color.Cyan);
-			}
-
-			using (MemoryStream stream = new MemoryStream())
-			{
-				//SevenZipBase.SetLibraryPath(tConfigWrapper.SevenDllPath);
-				//string tmpPath = Main.SavePath + "\\tConfigWrapper\\tmpFile.7z";
-				string tmpPath = Path.Combine(Main.SavePath, "tConfigWrapper", "tmpFile.zip");
-				var a = Assembly.GetExecutingAssembly().Location;
-				File.Copy(files[0], tmpPath, true);
-				FileStream fileStream = File.Open(tmpPath, FileMode.Open);
-				using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
-				{
-					MemoryStream configStream = new MemoryStream();
-					extractor.ExtractFile("Config.ini", configStream);
-					configStream.Position = 0L;
-					IniFileReader configReader = new IniFileReader(configStream);
-					IniFile iniFile = IniFile.FromStream(configReader);
-
-					foreach (string fileName in extractor.ArchiveFileNames)
-					{
-						ModContent.GetInstance<tConfigWrapper>().Logger.Debug($"Holy: {fileName}");
-					}
-				}
-				fileStream.Dispose();
-				File.Delete(tmpPath);
+				string fileWithoutExt = Path.GetFileName(files[i]);
+				spriteBatch.DrawString(Main.fontMouseText, fileWithoutExt.Split('.')[0], new Vector2(50, 10 + (i * 20)), Color.Cyan);
 			}
 		}
 	}

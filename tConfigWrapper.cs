@@ -30,9 +30,17 @@ namespace tConfigWrapper {
 			//SevenZipBase.SetLibraryPath(SevenDllPath);
 		}
 
+		public override void PostAddRecipes() {
+			LoadStep.Setup();
+		}
+
 		public override void Unload() {
 			tCFModMenu.Deactivate();
+		}
+
+		public override void Close() {
 			File.Delete(SevenDllPath);
+			base.Close();
 		}
 
 		public override void UpdateUI(GameTime gameTime) {

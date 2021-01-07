@@ -1,4 +1,4 @@
 displayName = tConfig Wrapper
 author = pollen__
 version = 0.1
-dllReferences = SevenZipSharp, 7z.dll, 7z64.dll
+dllReferences = SevenZipSharp
