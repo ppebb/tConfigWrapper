@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Input;
 using Terraria;
 using Terraria.UI;
 using Terraria.ModLoader;
+using System.Text.RegularExpressions;
 using System.IO;
 using System.Reflection;
 using Gajatko.IniFiles;
@@ -13,6 +14,8 @@ using SevenZip;
 namespace tConfigWrapper.UI {
 	public class TConfigModMenu : UIState {
 		public string[] files;
+		public string regFile;
+		private static readonly Regex RemoveFileNameAndPath = new Regex(@"([\s\w]+?)\.obj$", RegexOptions.Compiled);
 		public override void Update(GameTime gameTime) {
 			if (Main.keyState.IsKeyDown(Keys.Escape)) {
 				Main.menuMode = 0;
@@ -25,7 +28,8 @@ namespace tConfigWrapper.UI {
 		public override void Draw(SpriteBatch spriteBatch) {
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
 			for (int i = 0; i < files.Length; i++) {
-				spriteBatch.DrawString(Main.fontMouseText, files[i], new Vector2(50, 10 + (i * 20)), Color.Cyan);
+				regFile = RemoveFileNameAndPath.Match(files[i]).Groups[1].Value;
+				spriteBatch.DrawString(Main.fontMouseText, regFile, new Vector2(50, 10 + (i * 20)), Color.Cyan);
 			}
 
 			using (MemoryStream stream = new MemoryStream())
