@@ -12,7 +12,7 @@ using tConfigWrapper.UI;
 namespace tConfigWrapper {
 	public class tConfigWrapper : Mod {
 		public static string ModsPath = Main.SavePath + "\\tConfigWrapper\\Mods";
-		public static readonly string SevenDllPath = Main.SavePath + "\\tConfigWrapper\\7z.dll";
+		public static string SevenDllPath => Path.Combine(Main.SavePath, "tConfigWrapper", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll");
 
 		internal TConfigModMenu tCFModMenu;
 		private UserInterface _tCGModMenu;
@@ -25,7 +25,7 @@ namespace tConfigWrapper {
 			_tCGModMenu = new UserInterface();
 			_tCGModMenu.SetState(tCFModMenu);
 
-			var sevenZipBytes = GetFileBytes("7z.dll");
+			var sevenZipBytes = GetFileBytes(Environment.Is64BitProcess ? "7z64.dll" : "7z.dll");
 			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
 			//SevenZipBase.SetLibraryPath(SevenDllPath);
 		}
