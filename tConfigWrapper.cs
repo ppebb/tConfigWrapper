@@ -11,21 +11,28 @@ using tConfigWrapper.UI;
 
 namespace tConfigWrapper {
 	public class tConfigWrapper : Mod {
-		public static string ModsPath = Main.SavePath + "/tConfigWrapper/Mods";
+		public static string ModsPath = Main.SavePath + "\\tConfigWrapper\\Mods";
+		public static string SevenDllPath => Path.Combine(Main.SavePath, "tConfigWrapper", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll");
+
 		internal TConfigModMenu tCFModMenu;
 		private UserInterface _tCGModMenu;
 		public override void Load() {
-			Directory.CreateDirectory(ModsPath + "/ModSettings");
+			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;
 			tCFModMenu = new TConfigModMenu();
 			tCFModMenu.Activate();
 			_tCGModMenu = new UserInterface();
 			_tCGModMenu.SetState(tCFModMenu);
+
+			var sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
+			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
+			//SevenZipBase.SetLibraryPath(SevenDllPath);
 		}
 
 		public override void Unload() {
 			tCFModMenu.Deactivate();
+			File.Delete(SevenDllPath);
 		}
 
 		public override void UpdateUI(GameTime gameTime) {
