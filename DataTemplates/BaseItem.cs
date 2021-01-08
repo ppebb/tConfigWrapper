@@ -12,27 +12,18 @@ namespace tConfigWrapper.DataTemplates
 
 		private ItemInfo _info;
 		private string _name;
+		private string _tooltip;
 		private Texture2D _texture;
 
 		public BaseItem()
 		{
 		}
 
-		public BaseItem(ItemInfo itemInfo)
-		{
-			_info = itemInfo;
-		}
-
-		public BaseItem(ItemInfo itemInfo, string name)
+		public BaseItem(ItemInfo itemInfo, string name = null, string tooltip = null, Texture2D texture = null)
 		{
 			_info = itemInfo;
 			_name = name;
-		}
-
-		public BaseItem(ItemInfo itemInfo, string name, Texture2D texture)
-		{
-			_info = itemInfo;
-			_name = name;
+			_tooltip = tooltip;
 			_texture = texture;
 		}
 
@@ -40,6 +31,9 @@ namespace tConfigWrapper.DataTemplates
 		{
 			if (_name != null)
 				DisplayName.SetDefault(_name);
+
+			if (_tooltip != null)
+				Tooltip.SetDefault(_tooltip);
 
 			if (_texture != null)
 				Main.itemTexture[item.type] = _texture;

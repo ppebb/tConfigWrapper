@@ -115,6 +115,7 @@ namespace tConfigWrapper {
 				IniFile iniFile = IniFile.FromStream(reader);
 
 				object info = new ItemInfo();
+				string tooltip = null;
 
 				foreach (IniFileSection section in iniFile.sections)
 				{
@@ -125,6 +126,13 @@ namespace tConfigWrapper {
 							var splitElement = element.Content.Split('=');
 
 							var statField = typeof(ItemInfo).GetField(splitElement[0]);
+
+							// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
+							if (splitElement[0] == "toolTip")
+							{
+								tooltip = splitElement[1];
+								continue;
+							}
 
 							if (statField == null || splitElement[0] == "type")
 							{
@@ -159,9 +167,9 @@ namespace tConfigWrapper {
 				}
 
 				if (itemTexture != null)
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, itemTexture));
+					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
 				else
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName));
+					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
 				reader.Dispose();
 			}
 		}
