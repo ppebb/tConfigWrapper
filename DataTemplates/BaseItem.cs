@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -8,8 +9,10 @@ namespace tConfigWrapper.DataTemplates
 	{
 		public override string Texture => "tConfigWrapper/DataTemplates/MissingTexture";
 		public override bool CloneNewInstances => true;
+
 		private ItemInfo _info;
 		private string _name;
+		private Texture2D _texture;
 
 		public BaseItem()
 		{
@@ -26,10 +29,20 @@ namespace tConfigWrapper.DataTemplates
 			_name = name;
 		}
 
+		public BaseItem(ItemInfo itemInfo, string name, Texture2D texture)
+		{
+			_info = itemInfo;
+			_name = name;
+			_texture = texture;
+		}
+
 		public override void SetStaticDefaults()
 		{
 			if (_name != null)
 				DisplayName.SetDefault(_name);
+
+			if (_texture != null)
+				Main.itemTexture[item.type] = _texture;
 		}
 
 		public override void SetDefaults()

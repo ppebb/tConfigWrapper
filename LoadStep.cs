@@ -7,6 +7,7 @@ using System.Reflection;
 using SevenZip;
 using Gajatko.IniFiles;
 using log4net;
+using Microsoft.Xna.Framework.Graphics;
 using tConfigWrapper.DataTemplates;
 using Terraria.ID;
 
@@ -62,9 +63,6 @@ namespace tConfigWrapper {
 							
 							if (fileName.Contains("\\Item\\")) {
 								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-								//ModContent.GetInstance<tConfigWrapper>().AddItem(); Okay so I know I literally got nothing done but I need a damn moditem class
-								//and it's too late at night for me to be thinking about that for me to understand how to do that.
-								//I want a single moditem class to handle all loading but I can't figure out how to do that right now because I am tired.
 							}
 						}
 
@@ -145,7 +143,25 @@ namespace tConfigWrapper {
 				// Get the mod name
 				string itemName = Path.GetFileNameWithoutExtension(fileName);
 				string internalName = $"{modName}:{itemName}";
-				ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, new BaseItem((ItemInfo)info, itemName));
+
+				// Check if a texture for the .ini file exists
+				string texturePath = Path.ChangeExtension(fileName, "png");
+				Texture2D itemTexture = null;
+				if (extractor.ArchiveFileNames.Contains(texturePath))
+				{
+					using (MemoryStream textureStream = new MemoryStream())
+					{
+						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
+						textureStream.Position = 0;
+
+						itemTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
+					}
+				}
+
+				if (itemTexture != null)
+					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, itemTexture));
+				else
+					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName));
 				reader.Dispose();
 			}
 		}
