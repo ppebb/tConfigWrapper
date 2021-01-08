@@ -31,7 +31,7 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
-			
+
 			string tmpPath = Path.Combine(Main.SavePath, "tConfigWrapper", "tmpFile.zip");
 			for (int i = 0; i < files.Length; i++) {
 				Stream stream;
@@ -58,19 +58,10 @@ namespace tConfigWrapper {
 							ModContent.GetInstance<tConfigWrapper>().Logger.Debug($"Holy: {fileName}");
 							if (Path.GetExtension(fileName) == ".ini")
 							{
-								// Disposing via "using"
-								using (MemoryStream iniStream = new MemoryStream())
-								{
-									extractor.ExtractFile(fileName, iniStream); // Extract the file to iniStream
-									iniStream.Position = 0; // Set the position to the start
-
-									IniFileReader iniFileReader = new IniFileReader(iniStream); // Make IniFileReader read from the iniStream
-									IniFile iniFile = IniFile.FromStream(iniFileReader); // Create an iniFile from iniFileReader, which reads from iniStream
-									logger.Debug($"{fileName} ---> {string.Join(", ", iniFile.elements)}"); // Log the elements of iniFile, so like autoReuse and stuff
-									logger.Debug($"{fileName} ---> {string.Join(", ", iniFile.sections)}"); // Log the sections of iniFile, so like [Stats] and [Recipe]
-
-									// We probably want to loop over iniFile.sections, that way we can do different stuff depending 
-									// on if section is [Stats] or [Recipe]. Then loop again over iniFile.Sections[i].elements and do stuff
+								if (fileName.Contains("\\Item\\")) {
+									//ModContent.GetInstance<tConfigWrapper>().AddItem(); Okay so I know I literally got nothing done but I need a damn moditem class
+									//and it's too late at night for me to be thinking about that for me to understand how to do that.
+									//I want a single moditem class to handle all loading but I can't figure out how to do that right now because I am tired.
 								}
 							}
 						}

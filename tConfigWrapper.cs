@@ -15,15 +15,15 @@ namespace tConfigWrapper {
 		public static string SevenDllPath => Path.Combine(Main.SavePath, "tConfigWrapper", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll");
 
 		internal TConfigModMenu tCFModMenu;
-		private UserInterface _tCGModMenu;
+		private UserInterface _tCFModMenu;
 		public override void Load() {
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;
 			tCFModMenu = new TConfigModMenu();
 			tCFModMenu.Activate();
-			_tCGModMenu = new UserInterface();
-			_tCGModMenu.SetState(tCFModMenu);
+			_tCFModMenu = new UserInterface();
+			_tCFModMenu.SetState(tCFModMenu);
 
 			var sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
 			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
@@ -44,7 +44,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void UpdateUI(GameTime gameTime) {
-			_tCGModMenu?.Update(gameTime);
+			_tCFModMenu?.Update(gameTime);
 		}
 
 		public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers) {
@@ -53,7 +53,7 @@ namespace tConfigWrapper {
 				layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
 					"tConfigWrapper: A Description",
 					delegate {
-						_tCGModMenu.Draw(Main.spriteBatch, new GameTime());
+						_tCFModMenu.Draw(Main.spriteBatch, new GameTime());
 						return true;
 					},
 					InterfaceScaleType.UI)
