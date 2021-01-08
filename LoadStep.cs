@@ -1,10 +1,14 @@
 ﻿using Terraria;
 using Terraria.ModLoader;
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Reflection;
 using SevenZip;
 using Gajatko.IniFiles;
+using log4net;
+using tConfigWrapper.DataTemplates;
+using Terraria.ID;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
@@ -12,6 +16,8 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
+
+		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
@@ -31,14 +37,11 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
-
-			string tmpPath = Path.Combine(Main.SavePath, "tConfigWrapper", "tmpFile.zip");
 			for (int i = 0; i < files.Length; i++) {
 				Stream stream;
 				using (stream = new MemoryStream())
 				{
-					File.Copy(files[i], tmpPath, true);
-					using (SevenZipExtractor extractor = new SevenZipExtractor(tmpPath))
+					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i]))
 					{
 						// Note for pollen, when you have a stream, at the end you have to dispose it
 						// There are two ways to do this, calling .Dispose(), or using "using (Stream whatever ...) { ... }"
@@ -51,18 +54,17 @@ namespace tConfigWrapper {
 						IniFileReader configReader = new IniFileReader(configStream);
 						IniFile configFile = IniFile.FromStream(configReader);
 						configStream.Dispose();
-
-						var logger = ModContent.GetInstance<tConfigWrapper>().Logger;
+						
 						foreach (string fileName in extractor.ArchiveFileNames)
 						{
-							ModContent.GetInstance<tConfigWrapper>().Logger.Debug($"Holy: {fileName}");
-							if (Path.GetExtension(fileName) == ".ini")
-							{
-								if (fileName.Contains("\\Item\\")) {
-									//ModContent.GetInstance<tConfigWrapper>().AddItem(); Okay so I know I literally got nothing done but I need a damn moditem class
-									//and it's too late at night for me to be thinking about that for me to understand how to do that.
-									//I want a single moditem class to handle all loading but I can't figure out how to do that right now because I am tired.
-								}
+							if (Path.GetExtension(fileName) != ".ini") 
+								continue; // If the extension is not .ini, ignore the file
+							
+							if (fileName.Contains("\\Item\\")) {
+								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
+								//ModContent.GetInstance<tConfigWrapper>().AddItem(); Okay so I know I literally got nothing done but I need a damn moditem class
+								//and it's too late at night for me to be thinking about that for me to understand how to do that.
+								//I want a single moditem class to handle all loading but I can't figure out how to do that right now because I am tired.
 							}
 						}
 
@@ -97,12 +99,55 @@ namespace tConfigWrapper {
 					//}
 				}
 			}
-			File.Delete(tmpPath);
 
 			//Reset progress bar
 			loadSubProgressText?.Invoke("");
-			loadProgressText?.Invoke("Adding Recipes");
+			loadProgressText?.Invoke("Loading mod");
 			loadProgress?.Invoke(0f);
+		}
+
+		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor)
+		{
+			using (MemoryStream iniStream = new MemoryStream())
+			{
+				extractor.ExtractFile(fileName, iniStream);
+				iniStream.Position = 0;
+
+				IniFileReader reader = new IniFileReader(iniStream);
+				IniFile iniFile = IniFile.FromStream(reader);
+
+				object info = new ItemInfo();
+
+				foreach (IniFileSection section in iniFile.sections)
+				{
+					foreach (IniFileElement element in section.elements)
+					{
+						if (section.Name == "Stats")
+						{
+							var splitElement = element.Content.Split('=');
+
+							var statField = typeof(ItemInfo).GetField(splitElement[0]);
+
+							if (statField == null || splitElement[0] == "type")
+							{
+								mod.Logger.Debug($"Field not found or invalid field! -> {splitElement[0]}");
+								continue;
+							}
+
+							// Convert the value to an object of type statField.FieldType
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+						}
+					}
+				}
+
+				// Get the mod name
+				string itemName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{itemName}";
+				ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, new BaseItem((ItemInfo)info, itemName));
+				reader.Dispose();
+			}
 		}
 	}
 }

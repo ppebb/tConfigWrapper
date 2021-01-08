@@ -27,10 +27,7 @@ namespace tConfigWrapper {
 
 			var sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
 			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
-			//SevenZipBase.SetLibraryPath(SevenDllPath);
-		}
 
-		public override void PostAddRecipes() {
 			LoadStep.Setup();
 		}
 

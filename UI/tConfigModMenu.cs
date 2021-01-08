@@ -14,8 +14,8 @@ namespace tConfigWrapper.UI {
 			if (Main.keyState.IsKeyDown(Keys.Escape)) {
 				Main.menuMode = 0;
 			}
-			Terraria.GameInput.PlayerInput.WritingText = true;
-			Main.instance.HandleIME();
+			//Terraria.GameInput.PlayerInput.WritingText = true;
+			//Main.instance.HandleIME();
 			base.Update(gameTime);
 		}
 
