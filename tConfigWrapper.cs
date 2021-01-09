@@ -12,9 +12,11 @@ namespace tConfigWrapper {
 	public class tConfigWrapper : Mod {
 		public static string ModsPath = Main.SavePath + "\\tConfigWrapper\\Mods";
 		public static string SevenDllPath => Path.Combine(Main.SavePath, "tConfigWrapper", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll");
+		public static bool ReportErrors = false;
 
 		internal TConfigModMenu tCFModMenu;
 		private UserInterface _tCFModMenu;
+
 		public override void Load() {
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
@@ -37,6 +39,9 @@ namespace tConfigWrapper {
 
 		public override void Unload() {
 			tCFModMenu.Deactivate();
+
+			if (ReportErrors)
+				UploadLogs();
 		}
 
 		public override void Close() {
@@ -63,6 +68,10 @@ namespace tConfigWrapper {
 					InterfaceScaleType.UI)
 				);
 			}
+		}
+
+		private void UploadLogs() {
+			File.ReadAllText()
 		}
 
 		private void Main_DrawMenu(On.Terraria.Main.orig_DrawMenu orig, Main self, GameTime gameTime) {

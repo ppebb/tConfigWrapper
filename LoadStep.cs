@@ -1,4 +1,4 @@
-using Gajatko.IniFiles;
+﻿using Gajatko.IniFiles;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
@@ -144,6 +144,7 @@ namespace tConfigWrapper {
 				recipe.AddRecipe();
 			}
 		}
+
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
@@ -174,6 +175,7 @@ namespace tConfigWrapper {
 
 							if (statField == null || splitElement[0] == "type") {
 								mod.Logger.Debug($"Field not found or invalid field! -> {splitElement[0]}");
+								tConfigWrapper.ReportErrors = true;
 								continue;
 							}
 
