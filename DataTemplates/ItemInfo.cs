@@ -4,7 +4,7 @@ using Terraria.UI;
 
 namespace tConfigWrapper.DataTemplates
 {
-	// All the public instanced fields of the Item class 
+	// All the public instanced fields of the Item class
 	// They are nullable so that the value of the item is only changed when a field is not null
 	// All the fields were extracted via typeof(Item).GetFields()
 	public struct ItemInfo

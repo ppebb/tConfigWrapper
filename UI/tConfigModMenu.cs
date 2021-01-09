@@ -2,7 +2,6 @@
 using Microsoft.Xna.Framework.Input;
 using Terraria;
 using Terraria.UI;
-using System.Text.RegularExpressions;
 using System.IO;
 using ReLogic.Graphics;
 using Microsoft.Xna.Framework.Graphics;
