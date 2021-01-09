@@ -41,6 +41,7 @@ namespace tConfigWrapper {
 
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
 			for (int i = 0; i < files.Length; i++) {
+				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
 				Stream stream;
 				using (stream = new MemoryStream()) {
 					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
@@ -55,7 +56,7 @@ namespace tConfigWrapper {
 						IniFileReader configReader = new IniFileReader(configStream);
 						IniFile configFile = IniFile.FromStream(configReader);
 						configStream.Dispose();
-
+						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
 						foreach (string fileName in extractor.ArchiveFileNames) {
 							if (Path.GetExtension(fileName) != ".ini")
 								continue; // If the extension is not .ini, ignore the file
@@ -64,7 +65,7 @@ namespace tConfigWrapper {
 								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 
 							else if (fileName.Contains("\\NPC\\"))
-								CreateNPC();
+								CreateNPC(Path.GetFileNameWithoutExtension(files[i]));
 						}
 
 						loadProgress?.Invoke((float)i / files.Length);
@@ -187,6 +188,7 @@ namespace tConfigWrapper {
 				// Get the mod name
 				string itemName = Path.GetFileNameWithoutExtension(fileName);
 				string internalName = $"{modName}:{itemName}";
+				bool logItemAndModName = false;
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
@@ -211,6 +213,7 @@ namespace tConfigWrapper {
 
 							if (statField == null || splitElement[0] == "type") {
 								mod.Logger.Debug($"Field not found or invalid field! -> {splitElement[0]}");
+								logItemAndModName = true;
 								tConfigWrapper.ReportErrors = true;
 								continue;
 							}
@@ -226,6 +229,9 @@ namespace tConfigWrapper {
 						}
 					}
 				}
+
+				if (logItemAndModName)
+					mod.Logger.Debug($"{modName}: {itemName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
 
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
@@ -261,7 +267,8 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateNPC() {
+		private static void CreateNPC(string modName) {
+			mod.Logger.Debug($"Loading NPCs For {modName}");
 			using (MemoryStream iniSteam = new MemoryStream()) {
 
 			}

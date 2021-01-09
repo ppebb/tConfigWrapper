@@ -40,7 +40,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void PostAddRecipes() {
-			if (ReportErrors)
+			if (ReportErrors && ModContent.GetInstance<WrapperModConfig>().SendConfig)
 				UploadLogs();
 		}
 
@@ -77,7 +77,7 @@ namespace tConfigWrapper {
 		}
 
 		private void UploadLogs() {
-			using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+			using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", Main.dedServ ? "server.log" : "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 				using (StreamReader reader = new StreamReader(fileStream, Encoding.Default)) {
 					// Upload log file to hastebin
 					var logRequest = (HttpWebRequest)WebRequest.Create(@"https://hastebin.com/documents");
@@ -103,7 +103,8 @@ namespace tConfigWrapper {
 					discordRequest.Method = "POST";
 					discordRequest.ContentType = "application/json";
 
-					var discordContent = "{\"content\": \"A new log has been uploaded! Link: " + logResponseString + "\"}";
+					string serverOrClient = Main.dedServ ? "server" : "client";
+					var discordContent = "{\"content\": \"A new " + serverOrClient + " log has been uploaded! Link: " + logResponseString + "\"}";
 					var discordData = Encoding.ASCII.GetBytes(discordContent);
 					discordRequest.ContentLength = discordData.Length;
 
