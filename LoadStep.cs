@@ -8,6 +8,7 @@ using System.IO;
 using System.Reflection;
 using tConfigWrapper.DataTemplates;
 using Terraria;
+using Terraria.Audio;
 using Terraria.ID;
 using Terraria.ModLoader;
 
@@ -197,6 +198,14 @@ namespace tConfigWrapper {
 							// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
 							if (splitElement[0] == "toolTip") {
 								tooltip = splitElement[1];
+								continue;
+							}
+
+							if (splitElement[0] == "useSound") {
+								var soundStyleId = int.Parse(splitElement[1]);
+								var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
+								statField = typeof(ItemInfo).GetField("UseSound");
+								statField.SetValue(info, soundStyle);
 								continue;
 							}
 
