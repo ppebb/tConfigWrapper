@@ -9,7 +9,6 @@ using Gajatko.IniFiles;
 using log4net;
 using Microsoft.Xna.Framework.Graphics;
 using tConfigWrapper.DataTemplates;
-using Terraria.ID;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
@@ -55,12 +54,12 @@ namespace tConfigWrapper {
 						IniFileReader configReader = new IniFileReader(configStream);
 						IniFile configFile = IniFile.FromStream(configReader);
 						configStream.Dispose();
-						
+
 						foreach (string fileName in extractor.ArchiveFileNames)
 						{
-							if (Path.GetExtension(fileName) != ".ini") 
+							if (Path.GetExtension(fileName) != ".ini")
 								continue; // If the extension is not .ini, ignore the file
-							
+
 							if (fileName.Contains("\\Item\\")) {
 								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 							}
@@ -165,7 +164,19 @@ namespace tConfigWrapper {
 						itemTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
 					}
 				}
-
+				//Possible code to change the internal mod name so WMITF will register items as from their original mod
+				/*if (itemTexture != null) {
+					ModItem item = new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture);
+					var field = typeof(Mod).GetField("<Name>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+					field.SetValue(item.mod, modName);
+					ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, item);
+				}
+				else {
+					ModItem item = new BaseItem((ItemInfo)info, itemName, tooltip);
+					var field = typeof(Mod).GetField("<Name>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+					field.SetValue(item.mod, modName);
+					ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, item);
+				}*/
 				if (itemTexture != null)
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
 				else

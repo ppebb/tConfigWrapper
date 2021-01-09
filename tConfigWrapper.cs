@@ -2,7 +2,6 @@ using Microsoft.Xna.Framework;
 using Terraria;
 using Terraria.UI;
 using Terraria.ModLoader;
-using SevenZip;
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -50,6 +49,8 @@ namespace tConfigWrapper {
 				layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
 					"tConfigWrapper: A Description",
 					delegate {
+						if (!Main.gameMenu)
+							return true;
 						_tCFModMenu.Draw(Main.spriteBatch, new GameTime());
 						return true;
 					},
