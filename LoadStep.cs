@@ -117,6 +117,11 @@ namespace tConfigWrapper {
 				object info = new ItemInfo();
 				string tooltip = null;
 
+				// Get the mod name
+				string itemName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{itemName}";
+				ModRecipe recipe = new ModRecipe(mod);
+
 				foreach (IniFileSection section in iniFile.sections)
 				{
 					foreach (IniFileElement element in section.elements)
@@ -145,12 +150,35 @@ namespace tConfigWrapper {
 							object realValue = converter.ConvertFromString(splitElement[1]);
 							statField.SetValue(info, realValue);
 						}
+						else if (section.Name == "Recipe")
+						{
+							string[] splitElement = element.Content.Split('=');
+							string key = splitElement[0];
+							string value = splitElement[1];
+							
+							if (key == "Amount")
+								recipe.SetResult(mod, internalName, int.Parse(value));
+							if (key == "needWater")
+								recipe.needWater = bool.Parse(value);
+							
+							if (key == "Items")
+							{
+								foreach (string recipeItem in value.Split(','))
+								{
+									var recipeItemInfo = recipeItem.Split(null, 2);
+									int amount = int.Parse(recipeItemInfo[0]);
+									int itemID = ItemID.Search.GetId(recipeItemInfo[1]);
+									recipe.AddIngredient(itemID, amount);
+								}
+							}
+
+							if (key == "Tiles")
+							{
+
+							}
+						}
 					}
 				}
-
-				// Get the mod name
-				string itemName = Path.GetFileNameWithoutExtension(fileName);
-				string internalName = $"{modName}:{itemName}";
 
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
