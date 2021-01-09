@@ -1,12 +1,14 @@
-﻿using Gajatko.IniFiles;
+using Gajatko.IniFiles;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
 using tConfigWrapper.DataTemplates;
 using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper {
@@ -15,6 +17,8 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
+
+		private static Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
@@ -104,6 +108,42 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 		}
 
+		public static void SetupRecipes() {
+			// TODO: @pollen__, create a custom loading step
+			foreach (var iniFileSection in recipeDict) {
+				string modName = iniFileSection.Key.Split(':')[0];
+				ModRecipe recipe = new ModRecipe(mod);
+				foreach (var element in iniFileSection.Value.elements) {
+					string[] splitElement = element.Content.Split('=');
+					string key = splitElement[0];
+					string value = splitElement[1];
+
+					if (key == "Amount")
+						recipe.SetResult(mod, iniFileSection.Key, int.Parse(value));
+					if (key == "needWater")
+						recipe.needWater = bool.Parse(value);
+
+					if (key == "Items") {
+						foreach (string recipeItem in value.Split(',')) {
+							var recipeItemInfo = recipeItem.Split(null, 2);
+							int amount = int.Parse(recipeItemInfo[0]);
+
+							int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1]}");
+							if (itemID == 0)
+								itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
+
+							recipe.AddIngredient(itemID, amount);
+						}
+					}
+
+					if (key == "Tiles") {
+						// TODO: Get TileID from a string like `Anvil` or `Mythril Anvil` and do the code below
+						// recipe.AddTile(tileID);
+					}
+				}
+				recipe.AddRecipe();
+			}
+		}
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
@@ -114,6 +154,10 @@ namespace tConfigWrapper {
 
 				object info = new ItemInfo();
 				string tooltip = null;
+
+				// Get the mod name
+				string itemName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{itemName}";
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
@@ -138,12 +182,12 @@ namespace tConfigWrapper {
 							object realValue = converter.ConvertFromString(splitElement[1]);
 							statField.SetValue(info, realValue);
 						}
+						else if (section.Name == "Recipe") {
+							if (!recipeDict.ContainsKey(internalName))
+								recipeDict.Add(internalName, section);
+						}
 					}
 				}
-
-				// Get the mod name
-				string itemName = Path.GetFileNameWithoutExtension(fileName);
-				string internalName = $"{modName}:{itemName}";
 
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");

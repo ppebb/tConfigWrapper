@@ -30,6 +30,11 @@ namespace tConfigWrapper {
 			LoadStep.Setup();
 		}
 
+		public override void AddRecipes()
+		{
+			LoadStep.SetupRecipes();
+		}
+
 		public override void Unload() {
 			tCFModMenu.Deactivate();
 		}
