@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using tConfigWrapper.DataTemplates;
 using Terraria;
@@ -41,6 +42,11 @@ namespace tConfigWrapper {
 
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
 			for (int i = 0; i < files.Length; i++) {
+				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])} is enabled!");
+			}
+
+			for (int i = 0; i < files.Length; i++) {
+				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
 				Stream stream;
 				using (stream = new MemoryStream()) {
@@ -57,7 +63,10 @@ namespace tConfigWrapper {
 						IniFile configFile = IniFile.FromStream(configReader);
 						configStream.Dispose();
 						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+						int numIterations = 0;
 						foreach (string fileName in extractor.ArchiveFileNames) {
+							loadSubProgressText?.Invoke(fileName);
+							numIterations++;
 							if (Path.GetExtension(fileName) != ".ini")
 								continue; // If the extension is not .ini, ignore the file
 
@@ -65,11 +74,9 @@ namespace tConfigWrapper {
 								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 
 							else if (fileName.Contains("\\NPC\\"))
-								CreateNPC(Path.GetFileNameWithoutExtension(files[i]));
+								CreateNPC(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
+							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 						}
-
-						loadProgress?.Invoke((float)i / files.Length);
-						loadSubProgressText?.Invoke(Path.GetFileName(files[i]));
 					}
 
 
@@ -133,7 +140,14 @@ namespace tConfigWrapper {
 							if (itemID == 0)
 								itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
 
-							recipe.AddIngredient(itemID, amount);
+
+							var numberIngredients = recipe.requiredItem.Count(i => i != null & i.type != ItemID.None);
+							if (numberIngredients < 14)
+								recipe.AddIngredient(itemID, amount);
+							else {
+								mod.Logger.Debug($"The following item has exceeded the max ingredient limit! --> {iniFileSection.Key}");
+								tConfigWrapper.ReportErrors = true;
+							}
 						}
 					}
 
@@ -153,26 +167,30 @@ namespace tConfigWrapper {
 						}
 					}
 				}
-				recipe.AddRecipe();
+
+				if (recipe.createItem != null && recipe.createItem.type != ItemID.None)
+					recipe.AddRecipe();
 				loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
-			//Reset progress bar
-			loadSubProgressText?.Invoke("");
-			loadProgressText?.Invoke("Loading mod");
-			loadProgress?.Invoke(0f);
 		}
 
 		private static string ConvertTileStringTo14(string noSpaceTile) {
 			if (noSpaceTile == "Anvil")
 				return "Anvils";
+			else if (noSpaceTile == "WorkBench" || noSpaceTile == "Workbench")
+				return "WorkBenches";
+			else if (noSpaceTile == "Furnace")
+				return "Furnaces";
+			else if (noSpaceTile == "Tinkerer'sWorkshop")
+				return "TinkerersWorkbench";
+			else if (noSpaceTile == "Bottle")
+				return "Bottles";
+			else if (noSpaceTile == "Bookcase")
+				return "Bookcases";
 			return noSpaceTile;
 		}
 
-		private static bool CheckStringConversion(string noSpaceTile) {
-			if (noSpaceTile == "Anvil")
-				return true;
-			return false;
-		}
+		private static bool CheckStringConversion(string noSpaceTile) => noSpaceTile == "Anvil" || noSpaceTile == "WorkBench" || noSpaceTile == "Workbench" || noSpaceTile == "Furnace" || noSpaceTile == "Tinkerer'sWorkshop" || noSpaceTile == "Bottle" || noSpaceTile == "Bookcase";
 
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
 			using (MemoryStream iniStream = new MemoryStream()) {
@@ -211,8 +229,11 @@ namespace tConfigWrapper {
 								continue;
 							}
 
-							if (statField == null || splitElement[0] == "type") {
-								mod.Logger.Debug($"Field not found or invalid field! -> {splitElement[0]}");
+							if (splitElement[0] == "type")
+								continue;
+
+							if (statField == null) {
+								mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
 								logItemAndModName = true;
 								tConfigWrapper.ReportErrors = true;
 								continue;
@@ -244,19 +265,7 @@ namespace tConfigWrapper {
 						itemTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
 					}
 				}
-				//Possible code to change the internal mod name so WMITF will register items as from their original mod
-				/*if (itemTexture != null) {
-					ModItem item = new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture);
-					var field = typeof(Mod).GetField("<Name>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
-					field.SetValue(item.mod, modName);
-					ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, item);
-				}
-				else {
-					ModItem item = new BaseItem((ItemInfo)info, itemName, tooltip);
-					var field = typeof(Mod).GetField("<Name>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
-					field.SetValue(item.mod, modName);
-					ModContent.GetInstance<tConfigWrapper>().AddItem(internalName, item);
-				}*/
+
 				if (itemTexture != null)
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
 
@@ -267,10 +276,53 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateNPC(string modName) {
+		private static void CreateNPC(string fileName, string modName, SevenZipExtractor extractor) {
 			mod.Logger.Debug($"Loading NPCs For {modName}");
-			using (MemoryStream iniSteam = new MemoryStream()) {
+			using (MemoryStream iniStream = new MemoryStream()) {
+				extractor.ExtractFile(fileName, iniStream);
+				iniStream.Position = 0L;
 
+				IniFileReader reader = new IniFileReader(iniStream);
+				IniFile iniFile = IniFile.FromStream(reader);
+
+				object info = new NpcInfo();
+
+				string npcName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{npcName}";
+				bool logNPCAndModName = false;
+
+				foreach (IniFileSection section in iniFile.sections) {
+					foreach (IniFileElement element in section.elements) {
+						if (section.Name == "Stats") {
+							var splitElement = element.Content.Split('=');
+
+							var statField = typeof(NpcInfo).GetField(splitElement[0]);
+
+							if (splitElement[0] == "type")
+								continue;
+
+							if (statField == null) {
+								mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
+								logNPCAndModName = true;
+								tConfigWrapper.ReportErrors = true;
+								continue;
+							}
+
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+						}
+						else if (section.Name == "BuffImmunities") {
+							// do
+						}
+						else if (section.Name == "Drops") {
+							// do
+						}
+					}
+				}
+
+				if (logNPCAndModName)
+					mod.Logger.Debug($"{modName}: {npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
 			}
 		}
 	}

@@ -2,7 +2,7 @@
 using Terraria.Audio;
 
 namespace tConfigWrapper.DataTemplates {
-	struct NpcInfo {
+	public struct NpcInfo {
 		public int? teleportStyle;
 		public float? teleportTime;
 		public int? netSpam;
