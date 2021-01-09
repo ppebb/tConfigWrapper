@@ -1,18 +1,17 @@
 ﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using ReLogic.Graphics;
+using System.IO;
 using Terraria;
 using Terraria.UI;
-using System.IO;
-using ReLogic.Graphics;
-using Microsoft.Xna.Framework.Graphics;
 
 namespace tConfigWrapper.UI {
 	public class TConfigModMenu : UIState {
 		public string[] files;
 		public override void Update(GameTime gameTime) {
-			if (Main.keyState.IsKeyDown(Keys.Escape)) {
+			if (Main.keyState.IsKeyDown(Keys.Escape))
 				Main.menuMode = 0;
-			}
 
 			base.Update(gameTime);
 		}
