@@ -1,12 +1,12 @@
-using Microsoft.Xna.Framework;
-using Terraria;
-using Terraria.UI;
-using Terraria.ModLoader;
-using System;
-using System.IO;
-using System.Collections.Generic;
+﻿using Microsoft.Xna.Framework;
 using ReLogic.Graphics;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using tConfigWrapper.UI;
+using Terraria;
+using Terraria.ModLoader;
+using Terraria.UI;
 
 namespace tConfigWrapper {
 	public class tConfigWrapper : Mod {
@@ -51,6 +51,7 @@ namespace tConfigWrapper {
 					delegate {
 						if (!Main.gameMenu)
 							return true;
+
 						_tCFModMenu.Draw(Main.spriteBatch, new GameTime());
 						return true;
 					},

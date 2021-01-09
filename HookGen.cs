@@ -1,9 +1,9 @@
 ﻿using MonoMod.RuntimeDetour.HookGen;
+using System;
+using System.Reflection;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
-using System;
-using System.Reflection;
 
 namespace tConfigWrapper {
 	public static class Hooks {

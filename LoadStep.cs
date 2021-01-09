@@ -1,14 +1,13 @@
-﻿using Terraria;
-using Terraria.ModLoader;
+﻿using Gajatko.IniFiles;
+using Microsoft.Xna.Framework.Graphics;
+using SevenZip;
 using System;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
-using SevenZip;
-using Gajatko.IniFiles;
-using log4net;
-using Microsoft.Xna.Framework.Graphics;
 using tConfigWrapper.DataTemplates;
+using Terraria;
+using Terraria.ModLoader;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
@@ -22,7 +21,6 @@ namespace tConfigWrapper {
 		public static void Setup() {
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
-
 
 			object loadModsValue = assembly.GetType("Terraria.ModLoader.UI.Interface").GetField("loadMods", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 			MethodInfo LoadStageMethod = UILoadModsType.GetMethod("SetLoadStage", BindingFlags.Instance | BindingFlags.Public);
@@ -39,10 +37,8 @@ namespace tConfigWrapper {
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
 			for (int i = 0; i < files.Length; i++) {
 				Stream stream;
-				using (stream = new MemoryStream())
-				{
-					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i]))
-					{
+				using (stream = new MemoryStream()) {
+					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
 						// Note for pollen, when you have a stream, at the end you have to dispose it
 						// There are two ways to do this, calling .Dispose(), or using "using (Stream whatever ...) { ... }"
 						// The "using" way is better because it will always Dispose it, even if there's an exception
@@ -55,17 +51,18 @@ namespace tConfigWrapper {
 						IniFile configFile = IniFile.FromStream(configReader);
 						configStream.Dispose();
 
-						foreach (string fileName in extractor.ArchiveFileNames)
-						{
+						foreach (string fileName in extractor.ArchiveFileNames) {
 							if (Path.GetExtension(fileName) != ".ini")
 								continue; // If the extension is not .ini, ignore the file
 
-							if (fileName.Contains("\\Item\\")) {
+							if (fileName.Contains("\\Item\\"))
 								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-							}
+
+							else if (fileName.Contains("\\NPC\\"))
+								CreateNPC();
 						}
 
-						loadProgress?.Invoke((float) i / files.Length);
+						loadProgress?.Invoke((float)i / files.Length);
 						loadSubProgressText?.Invoke(Path.GetFileName(files[i]));
 					}
 
@@ -96,6 +93,10 @@ namespace tConfigWrapper {
 					//}
 				}
 			}
+			//Adding recipes, happens after everything else
+			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
+			loadProgress.Invoke(0f);
+
 
 			//Reset progress bar
 			loadSubProgressText?.Invoke("");
@@ -103,10 +104,8 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 		}
 
-		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor)
-		{
-			using (MemoryStream iniStream = new MemoryStream())
-			{
+		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
+			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0;
 
@@ -116,25 +115,20 @@ namespace tConfigWrapper {
 				object info = new ItemInfo();
 				string tooltip = null;
 
-				foreach (IniFileSection section in iniFile.sections)
-				{
-					foreach (IniFileElement element in section.elements)
-					{
-						if (section.Name == "Stats")
-						{
+				foreach (IniFileSection section in iniFile.sections) {
+					foreach (IniFileElement element in section.elements) {
+						if (section.Name == "Stats") {
 							var splitElement = element.Content.Split('=');
 
 							var statField = typeof(ItemInfo).GetField(splitElement[0]);
 
 							// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
-							if (splitElement[0] == "toolTip")
-							{
+							if (splitElement[0] == "toolTip") {
 								tooltip = splitElement[1];
 								continue;
 							}
 
-							if (statField == null || splitElement[0] == "type")
-							{
+							if (statField == null || splitElement[0] == "type") {
 								mod.Logger.Debug($"Field not found or invalid field! -> {splitElement[0]}");
 								continue;
 							}
@@ -154,10 +148,8 @@ namespace tConfigWrapper {
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D itemTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath))
-				{
-					using (MemoryStream textureStream = new MemoryStream())
-					{
+				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+					using (MemoryStream textureStream = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
 						textureStream.Position = 0;
 
@@ -179,9 +171,17 @@ namespace tConfigWrapper {
 				}*/
 				if (itemTexture != null)
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+
 				else
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+
 				reader.Dispose();
+			}
+		}
+
+		private static void CreateNPC() {
+			using (MemoryStream iniSteam = new MemoryStream()) {
+
 			}
 		}
 	}
