@@ -140,6 +140,7 @@ namespace tConfigWrapper {
 							string noSpaceTile = recipeTile.Replace(" ", "");
 							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile)) {
 								mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+								tConfigWrapper.ReportErrors = true;
 							}
 							else if (CheckStringConversion(noSpaceTile)) {
 								string converted = ConvertTileStringTo14(noSpaceTile);
