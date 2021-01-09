@@ -40,7 +40,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void PostAddRecipes() {
-			if (ReportErrors && ModContent.GetInstance<WrapperModConfig>().SendConfig)
+			if (ReportErrors && CheckForInternetConnection() && ModContent.GetInstance<WrapperModConfig>().SendConfig)
 				UploadLogs();
 		}
 
@@ -53,6 +53,19 @@ namespace tConfigWrapper {
 			File.Delete(SevenDllPath);
 
 			base.Close();
+		}
+
+		public static bool CheckForInternetConnection() {
+			try {
+				using (var client = new WebClient()) {
+					using (client.OpenRead("http://google.com/"))
+						return true;
+				}
+			}
+			catch {
+				ModContent.GetInstance<tConfigWrapper>().Logger.Debug("Unable to connect to the internet");
+				return false;
+			}
 		}
 
 		public override void UpdateUI(GameTime gameTime) {
