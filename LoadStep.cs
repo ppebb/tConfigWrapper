@@ -97,11 +97,6 @@ namespace tConfigWrapper {
 					//}
 				}
 			}
-			//Adding recipes, happens after everything else
-			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
-			loadProgress.Invoke(0f);
-
-
 			//Reset progress bar
 			loadSubProgressText?.Invoke("");
 			loadProgressText?.Invoke("Loading mod");
@@ -110,7 +105,11 @@ namespace tConfigWrapper {
 
 		public static void SetupRecipes() {
 			// TODO: @pollen__, create a custom loading step
+			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
+			loadProgress.Invoke(0f);
+			int progressCount = 0;
 			foreach (var iniFileSection in recipeDict) {
+				progressCount++;
 				string modName = iniFileSection.Key.Split(':')[0];
 				ModRecipe recipe = new ModRecipe(mod);
 				foreach (var element in iniFileSection.Value.elements) {
@@ -137,12 +136,39 @@ namespace tConfigWrapper {
 					}
 
 					if (key == "Tiles") {
-						// TODO: Get TileID from a string like `Anvil` or `Mythril Anvil` and do the code below
-						// recipe.AddTile(tileID);
+						foreach (string recipeTile in value.Split(',')) {
+							string noSpaceTile = recipeTile.Replace(" ", "");
+							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile)) {
+								mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+							}
+							else if (CheckStringConversion(noSpaceTile)) {
+								string converted = ConvertTileStringTo14(noSpaceTile);
+								recipe.AddTile(TileID.Search.GetId(converted));
+							}
+							else
+								recipe.AddTile(TileID.Search.GetId(noSpaceTile));
+						}
 					}
 				}
 				recipe.AddRecipe();
+				loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
+			//Reset progress bar
+			loadSubProgressText?.Invoke("");
+			loadProgressText?.Invoke("Loading mod");
+			loadProgress?.Invoke(0f);
+		}
+
+		private static string ConvertTileStringTo14(string noSpaceTile) {
+			if (noSpaceTile == "Anvil")
+				return "Anvils";
+			return noSpaceTile;
+		}
+
+		private static bool CheckStringConversion(string noSpaceTile) {
+			if (noSpaceTile == "Anvil")
+				return true;
+			return false;
 		}
 
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
