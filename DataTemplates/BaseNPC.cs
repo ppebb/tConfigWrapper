@@ -41,7 +41,7 @@ namespace tConfigWrapper.DataTemplates {
 		/// Sets the default values of an <see cref="NPC"/> by getting the values from <see cref="_info"/>
 		/// </summary>
 		private void SetDefaultsFromInfo() {
-			var infoFields = typeof(ItemInfo).GetFields();
+			var infoFields = typeof(NpcInfo).GetFields();
 			foreach (FieldInfo field in infoFields) {
 				var infoFieldValue = field.GetValue(_info);
 				var npcField = typeof(NPC).GetField(field.Name);
