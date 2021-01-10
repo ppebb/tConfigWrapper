@@ -442,8 +442,6 @@ namespace tConfigWrapper {
 				}*/
 
 				if (extractor.ArchiveFileNames.Contains(texturePath)) {
-					BaseTile tile = new BaseTile();
-					
 					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, texturePath, extractor), "tConfigWrapper/DataTemplates/MissingTexture");
 				}
 
