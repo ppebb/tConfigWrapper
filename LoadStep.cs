@@ -26,6 +26,8 @@ namespace tConfigWrapper {
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
+			var a = typeof(ModTile).GetFields(BindingFlags.Instance | BindingFlags.Public);
+			mod.Logger.Debug(string.Join("\n", a.Select(x => $"{x.Name} - {x.FieldType}")));
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
@@ -76,6 +78,9 @@ namespace tConfigWrapper {
 
 							else if (fileName.Contains("\\NPC\\"))
 								CreateNPC(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
+
+							//else if (fileName.Contains("\\Tile\\"))
+								//CreateTile(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 						}
 					}
@@ -149,7 +154,7 @@ namespace tConfigWrapper {
 							if (numberIngredients < 14)
 								recipe.AddIngredient(itemID, amount);
 							else {
-								mod.Logger.Debug($"The following item has exceeded the max ingredient limit! --> {iniFileSection.Key}");
+								mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
 								tConfigWrapper.ReportErrors = true;
 							}
 						}
@@ -231,6 +236,19 @@ namespace tConfigWrapper {
 								statField.SetValue(info, soundStyle);
 								continue;
 							}
+							else if (splitElement[0] == "createTileName") {
+								statField = typeof(ItemInfo).GetField("createTile");
+								var succeed = int.TryParse(splitElement[1], out var createTileID);
+								if (succeed) {
+									statField.SetValue(info, createTileID);
+									mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
+								}
+								else {
+									// ModContent Tile
+									mod.Logger.Debug($"TryParse(): Failed to parse the placeable tile! -> {splitElement[1]}");
+								}
+								continue;
+							}
 							else if (splitElement[0] == "type")
 								continue;
 							else if (statField == null) {
@@ -288,7 +306,6 @@ namespace tConfigWrapper {
 		}
 
 		private static void CreateNPC(string fileName, string modName, SevenZipExtractor extractor) {
-			mod.Logger.Debug($"Loading NPCs For {modName}");
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0L;
@@ -307,7 +324,8 @@ namespace tConfigWrapper {
 						if (section.Name == "Stats") {
 							var splitElement = element.Content.Split('=');
 
-							var statField = typeof(NpcInfo).GetField(splitElement[0]);
+							string split1Correct = ConvertField14(splitElement[0]);
+							var statField = typeof(NpcInfo).GetField(split1Correct);
 
 							if (splitElement[0] == "soundHit") {
 								var soundStyleID = int.Parse(splitElement[1]);
@@ -366,6 +384,71 @@ namespace tConfigWrapper {
 					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName));
 
 				reader.Dispose();
+			}
+		}
+
+		private static string ConvertField14(string splitElement) {
+			if (splitElement == "knockBackResist")
+				return "knockBackResist";
+			return splitElement;
+		}
+
+		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
+			using (MemoryStream iniSteam = new MemoryStream()) {
+				extractor.ExtractFile(fileName, iniSteam);
+				iniSteam.Position = 0L;
+
+				IniFileReader reader = new IniFileReader(iniSteam);
+				IniFile iniFile = IniFile.FromStream(reader);
+
+				object info = new TileInfo();
+
+				string tileName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{tileName}";
+				bool logTileAndName = false;
+
+				foreach (IniFileSection section in iniFile.sections) {
+					foreach (IniFileElement element in section.elements) {
+						if (section.Name == "Stats") {
+							var splitElement = element.Content.Split('=');
+
+							var statField = typeof(TileInfo).GetField(splitElement[0]);
+
+							if (splitElement[0] == "type")
+								continue;
+							else if (statField == null) {
+								mod.Logger.Debug($"Tile field not found or invalid field! -> {splitElement[0]}");
+								logTileAndName = true;
+								tConfigWrapper.ReportErrors = true;
+								continue;
+							}
+
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+						}
+					}
+				}
+
+				string texturePath = Path.ChangeExtension(fileName, "png");
+				/*Texture2D tileTexture = null;
+				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+					using (MemoryStream textureSteam = new MemoryStream()) {
+						extractor.ExtractFile(texturePath, textureSteam);
+						textureSteam.Position = 0L;
+
+						tileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureSteam);
+					}
+				}*/
+
+				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+					BaseTile tile = new BaseTile();
+					
+					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, texturePath, extractor), "tConfigWrapper/DataTemplates/MissingTexture");
+				}
+
+				if (logTileAndName)
+					mod.Logger.Debug($"{modName}: {tileName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 			}
 		}
 	}

@@ -34,8 +34,7 @@ namespace tConfigWrapper {
 			LoadStep.Setup();
 		}
 
-		public override void AddRecipes()
-		{
+		public override void AddRecipes() {
 			LoadStep.SetupRecipes();
 		}
 
@@ -51,7 +50,6 @@ namespace tConfigWrapper {
 
 		public override void Close() {
 			File.Delete(SevenDllPath);
-
 			base.Close();
 		}
 
