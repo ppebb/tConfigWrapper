@@ -79,8 +79,6 @@ namespace tConfigWrapper {
 							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 						}
 					}
-
-
 					// this is for the obj (im scared of it)
 					//stream.Position = 0L;
 					//BinaryReader reader;
@@ -114,7 +112,6 @@ namespace tConfigWrapper {
 		}
 
 		public static void SetupRecipes() {
-			// TODO: @pollen__, create a custom loading step
 			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
 			loadProgress.Invoke(0f);
 			int progressCount = 0;
@@ -227,19 +224,16 @@ namespace tConfigWrapper {
 								tooltip = splitElement[1];
 								continue;
 							}
-
-							if (splitElement[0] == "useSound") {
+							else if (splitElement[0] == "useSound") {
 								var soundStyleId = int.Parse(splitElement[1]);
 								var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
 								statField = typeof(ItemInfo).GetField("UseSound");
 								statField.SetValue(info, soundStyle);
 								continue;
 							}
-
-							if (splitElement[0] == "type")
+							else if (splitElement[0] == "type")
 								continue;
-
-							if (statField == null) {
+							else if (statField == null) {
 								mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
 								logItemAndModName = true;
 								tConfigWrapper.ReportErrors = true;
@@ -315,10 +309,21 @@ namespace tConfigWrapper {
 
 							var statField = typeof(NpcInfo).GetField(splitElement[0]);
 
-							if (splitElement[0] == "type")
+							if (splitElement[0] == "soundHit") {
+								var soundStyleID = int.Parse(splitElement[1]);
+								var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
+								statField = typeof(NpcInfo).GetField("HitSound");
+								statField.SetValue(info, soundStyle);
+							}
+							else if (splitElement[0] == "soundKilled") {
+								var soundStyleID = int.Parse(splitElement[1]);
+								var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
+								statField = typeof(NpcInfo).GetField("DeathSound");
+								statField.SetValue(info, soundStyle);
+							}
+							else if (splitElement[0] == "type")
 								continue;
-
-							if (statField == null) {
+							else if (statField == null) {
 								mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
 								logNPCAndModName = true;
 								tConfigWrapper.ReportErrors = true;
@@ -340,6 +345,25 @@ namespace tConfigWrapper {
 
 				if (logNPCAndModName)
 					mod.Logger.Debug($"{modName}: {npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
+
+				// Check if a texture for the .ini file exists
+				string texturePath = Path.ChangeExtension(fileName, "png");
+				Texture2D npcTexture = null;
+				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+					using (MemoryStream textureStream = new MemoryStream()) {
+						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
+						textureStream.Position = 0;
+
+						npcTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
+					}
+				}
+
+				if (npcTexture != null)
+					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
+				else
+					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName));
+
+				reader.Dispose();
 			}
 		}
 	}
