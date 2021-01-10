@@ -19,6 +19,7 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
+		internal static Dictionary<int, ItemInfo> globalItemInfos = new Dictionary<int, ItemInfo>();
 
 		private static Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
 
@@ -126,8 +127,14 @@ namespace tConfigWrapper {
 					string key = splitElement[0];
 					string value = splitElement[1];
 
-					if (key == "Amount")
-						recipe.SetResult(mod, iniFileSection.Key, int.Parse(value));
+					if (key == "Amount") {
+						int id;
+						if ((id = ItemID.FromLegacyName(iniFileSection.Key.Split(':')[1], 4)) != 0)
+							recipe.SetResult(id, int.Parse(value));
+						else
+							recipe.SetResult(mod, iniFileSection.Key, int.Parse(value));
+					}
+
 					if (key == "needWater")
 						recipe.needWater = bool.Parse(value);
 
@@ -266,9 +273,19 @@ namespace tConfigWrapper {
 					}
 				}
 
+				int id;
+				if ((id = ItemID.FromLegacyName(itemName, 4)) != 0) {
+					if (!globalItemInfos.ContainsKey(id))
+						globalItemInfos.Add(id, (ItemInfo)info);
+					else
+						globalItemInfos[id] = (ItemInfo)info;
+
+					reader.Dispose();
+					return;
+				}
+
 				if (itemTexture != null)
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
-
 				else
 					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
 

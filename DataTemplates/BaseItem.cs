@@ -40,6 +40,7 @@ namespace tConfigWrapper.DataTemplates {
 		public override bool Autoload(ref string name) {
 			return false; // Don't autoload since we want to manually create new items
 		}
+
 		/// <summary>
 		/// Sets the default values of an <see cref="Item"/> by getting the values from <see cref="_info"/>
 		/// </summary>
