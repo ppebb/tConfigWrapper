@@ -314,12 +314,14 @@ namespace tConfigWrapper {
 								var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
 								statField = typeof(NpcInfo).GetField("HitSound");
 								statField.SetValue(info, soundStyle);
+								continue;
 							}
 							else if (splitElement[0] == "soundKilled") {
 								var soundStyleID = int.Parse(splitElement[1]);
 								var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
 								statField = typeof(NpcInfo).GetField("DeathSound");
 								statField.SetValue(info, soundStyle);
+								continue;
 							}
 							else if (splitElement[0] == "type")
 								continue;
