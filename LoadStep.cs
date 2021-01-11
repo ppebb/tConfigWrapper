@@ -79,8 +79,8 @@ namespace tConfigWrapper {
 							else if (fileName.Contains("\\NPC\\"))
 								CreateNPC(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 
-							//else if (fileName.Contains("\\Tile\\"))
-								//CreateTile(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
+							else if (fileName.Contains("\\Tile\\"))
+								CreateTile(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
 							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 						}
 					}
@@ -242,10 +242,20 @@ namespace tConfigWrapper {
 								if (succeed) {
 									statField.SetValue(info, createTileID);
 									mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
+									logItemAndModName = true;
 								}
 								else {
-									// ModContent Tile
-									mod.Logger.Debug($"TryParse(): Failed to parse the placeable tile! -> {splitElement[1]}");
+									int modTile = mod.TileType($"{modName}:{fileName}");
+									if (modTile != 0) {
+										statField.SetValue(info, modTile);
+										mod.Logger.Debug($"Mod tile {modTile} was successfully added");
+										logItemAndModName = true;
+									}
+									else {
+										mod.Logger.Debug($"TryParse(): Failed to parse the placeable tile! -> {splitElement[1]}");
+										mod.Logger.Debug($"mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
+										logItemAndModName = true;
+									}
 								}
 								continue;
 							}
@@ -416,6 +426,8 @@ namespace tConfigWrapper {
 
 							if (splitElement[0] == "type")
 								continue;
+							else if (splitElement[0] == "id")
+								continue;
 							else if (statField == null) {
 								mod.Logger.Debug($"Tile field not found or invalid field! -> {splitElement[0]}");
 								logTileAndName = true;
@@ -431,7 +443,7 @@ namespace tConfigWrapper {
 				}
 
 				string texturePath = Path.ChangeExtension(fileName, "png");
-				/*Texture2D tileTexture = null;
+				Texture2D tileTexture = null;
 				if (extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureSteam = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureSteam);
@@ -439,10 +451,10 @@ namespace tConfigWrapper {
 
 						tileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureSteam);
 					}
-				}*/
+				}
 
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
-					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, texturePath, extractor), "tConfigWrapper/DataTemplates/MissingTexture");
+				if (tileTexture != null) {
+					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, tileTexture), "tConfigWrapper/DataTemplates/MissingTexture");
 				}
 
 				if (logTileAndName)

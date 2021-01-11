@@ -10,16 +10,14 @@ namespace tConfigWrapper.DataTemplates {
 
 		private TileInfo _info;
 		private readonly string _internalName;
-		private SevenZipExtractor _extractor;
-		private readonly string _texturePath;
+		private Texture2D _texture;
 
 		public BaseTile() { }
 
-		public BaseTile(TileInfo info, string internalName, string texturePath, SevenZipExtractor extractor) {
+		public BaseTile(TileInfo info, string internalName, Texture2D texture) {
 			_info = info;
 			_internalName = internalName;
-			_texturePath = texturePath;
-			_extractor = extractor;
+			_texture = texture;
 		}
 
 		public override void SetDefaults() {
@@ -27,18 +25,7 @@ namespace tConfigWrapper.DataTemplates {
 		}
 
 		public override void PostSetDefaults() {
-			Texture2D tileTexture = null;
-			if (_extractor.ArchiveFileNames.Contains(_texturePath)) {
-				using (MemoryStream textureSteam = new MemoryStream()) {
-					_extractor.ExtractFile(_texturePath, textureSteam);
-					textureSteam.Position = 0L;
-
-					tileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureSteam);
-				}
-			}
-
-			if (tileTexture != null)
-				Main.tileTexture[mod.TileType(_internalName)] = tileTexture;
+			Main.tileTexture[mod.TileType(_internalName)] = _texture;
 		}
 
 		public override bool Autoload(ref string name, ref string texture) {
@@ -54,8 +41,8 @@ namespace tConfigWrapper.DataTemplates {
 				var infoFieldValue = field.GetValue(_info);
 				var tileField = typeof(Tile).GetField(field.Name);
 
-				//if (infoFieldValue != null)
-					//tileField.SetValue(    I need an object for this lol      , infoFieldValue);
+				if (infoFieldValue != null)
+					tileField.SetValue(this, infoFieldValue);
 			}
 		}
 	}

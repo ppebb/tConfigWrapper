@@ -1,19 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace tConfigWrapper.DataTemplates {
+﻿namespace tConfigWrapper.DataTemplates {
 	public struct TileInfo {
-		public ushort? type;
-		public byte? liquid;
-		public ushort? wall;
-		public ushort? sTileHeader;
-		public byte? bTileHeader;
-		public byte? bTileHeader2;
-		public byte? bTileHeader3;
-		public short? frameX;
-		public short? frameY;
+		public int? soundType;
+		public int? soundStyle;
+		public int? dustType;
+		public int? drop;
+		public int? animationFrameHeight;
+		public float? mineResist;
+		public int? minPick;
+		public bool? disableSmartCursor;
+		public bool? disableSmartInteract;
+		public int[] adjTiles;
+		public int? closeDoorID;
+		public int? openDoorID;
+		public string chest;
+		public int? chestDrop;
+		public string dresser;
+		public int? dresserDrop;
+		public bool? bed;
+		public bool? torch;
+		public bool? sapling;
 	}
 }

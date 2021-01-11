@@ -56,8 +56,10 @@ namespace tConfigWrapper {
 		public static bool CheckForInternetConnection() {
 			try {
 				using (var client = new WebClient()) {
-					using (client.OpenRead("http://google.com/"))
-						return true;
+					using (client.OpenRead("https://hastebin.com/")) {
+						using (client.OpenRead("https://discord.com/api/webhooks/797477719301947432/pB9jjZt4km7baBFfiC2oAn5twSBVCitjwVxuoRRvMC8G7UjXfqyIY28LvXOjuUWMWmvJ"))
+							return true;
+					}
 				}
 			}
 			catch {
@@ -88,21 +90,24 @@ namespace tConfigWrapper {
 		}
 
 		private void UploadLogs() {
+			LoadStep.loadProgressText?.Invoke("tConfig Wrapper: Uploading Logs");
+			LoadStep.loadProgress?.Invoke(0f);
+			LoadStep.loadSubProgressText?.Invoke("");
 			using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", Main.dedServ ? "server.log" : "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 				using (StreamReader reader = new StreamReader(fileStream, Encoding.Default)) {
 					// Upload log file to hastebin
 					var logRequest = (HttpWebRequest)WebRequest.Create(@"https://hastebin.com/documents");
 					logRequest.Method = "POST";
 					logRequest.ContentType = "application/json";
-
+					LoadStep.loadProgress(0.20f);
 					var logContent = reader.ReadToEnd();
 					var logData = Encoding.ASCII.GetBytes(logContent);
 					logRequest.ContentLength = logData.Length;
-
+					LoadStep.loadProgress(0.40f);
 					using (var logRequestStream = logRequest.GetRequestStream()) {
 						logRequestStream.Write(logData, 0, logData.Length);
 					}
-
+					LoadStep.loadProgress(0.60f);
 					// Get and format the response, which includes the link to the hastebin
 					var logResponse = (HttpWebResponse)logRequest.GetResponse();
 					var logResponseString = new StreamReader(logResponse.GetResponseStream()).ReadToEnd();
@@ -113,12 +118,12 @@ namespace tConfigWrapper {
 					var discordRequest = (HttpWebRequest)WebRequest.Create(@"https://discord.com/api/webhooks/797477719301947432/pB9jjZt4km7baBFfiC2oAn5twSBVCitjwVxuoRRvMC8G7UjXfqyIY28LvXOjuUWMWmvJ");
 					discordRequest.Method = "POST";
 					discordRequest.ContentType = "application/json";
-
+					LoadStep.loadProgress(0.80f);
 					string serverOrClient = Main.dedServ ? "server" : "client";
 					var discordContent = "{\"content\": \"A new " + serverOrClient + " log has been uploaded! Link: " + logResponseString + "\"}";
 					var discordData = Encoding.ASCII.GetBytes(discordContent);
 					discordRequest.ContentLength = discordData.Length;
-
+					LoadStep.loadProgress(1f);
 					using (var discordRequestStream = discordRequest.GetRequestStream()) {
 						discordRequestStream.Write(discordData, 0, discordData.Length);
 					}
