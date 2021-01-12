@@ -1,4 +1,5 @@
 ﻿using Gajatko.IniFiles;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
@@ -11,6 +12,7 @@ using tConfigWrapper.DataTemplates;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper {
@@ -23,11 +25,11 @@ namespace tConfigWrapper {
 
 		private static Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
 
+		public static Dictionary<ModTile, bool> recipeTiles = new Dictionary<ModTile, bool>();
+
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
-			var a = typeof(ModTile).GetFields(BindingFlags.Instance | BindingFlags.Public);
-			mod.Logger.Debug(string.Join("\n", a.Select(x => $"{x.Name} - {x.FieldType}")));
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
@@ -136,11 +138,9 @@ namespace tConfigWrapper {
 						else
 							recipe.SetResult(mod, iniFileSection.Key, int.Parse(value));
 					}
-
-					if (key == "needWater")
+					else if (key == "needWater")
 						recipe.needWater = bool.Parse(value);
-
-					if (key == "Items") {
+					else if (key == "Items") {
 						foreach (string recipeItem in value.Split(',')) {
 							var recipeItemInfo = recipeItem.Split(null, 2);
 							int amount = int.Parse(recipeItemInfo[0]);
@@ -159,11 +159,10 @@ namespace tConfigWrapper {
 							}
 						}
 					}
-
-					if (key == "Tiles") {
+					else if (key == "Tiles") {
 						foreach (string recipeTile in value.Split(',')) {
 							string noSpaceTile = recipeTile.Replace(" ", "");
-							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile)) {
+							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) && mod.TileType($"{modName}:{noSpaceTile}") == 0) {
 								mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
 								tConfigWrapper.ReportErrors = true;
 							}
@@ -171,8 +170,14 @@ namespace tConfigWrapper {
 								string converted = ConvertTileStringTo14(noSpaceTile);
 								recipe.AddTile(TileID.Search.GetId(converted));
 							}
-							else
+							else if (mod.TileType($"{modName}:{noSpaceTile}") != 0) {
+								recipe.AddTile(mod.TileType($"{modName}:{noSpaceTile}"));
+								recipeTiles[mod.GetTile($"{modName}:{noSpaceTile}")] = true;
+								mod.Logger.Debug($"{noSpaceTile} added to recipe through mod.TileType!");
+							}
+							else {
 								recipe.AddTile(TileID.Search.GetId(noSpaceTile));
+							}
 						}
 					}
 				}
@@ -252,8 +257,7 @@ namespace tConfigWrapper {
 										logItemAndModName = true;
 									}
 									else {
-										mod.Logger.Debug($"TryParse(): Failed to parse the placeable tile! -> {splitElement[1]}");
-										mod.Logger.Debug($"mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
+										mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
 										logItemAndModName = true;
 									}
 								}
@@ -413,9 +417,10 @@ namespace tConfigWrapper {
 
 				object info = new TileInfo();
 
-				string tileName = Path.GetFileNameWithoutExtension(fileName);
+				string tileName = Path.GetFileNameWithoutExtension(fileName.Replace(" ", ""));
 				string internalName = $"{modName}:{tileName}";
 				bool logTileAndName = false;
+				bool oreTile = false;
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
@@ -424,9 +429,9 @@ namespace tConfigWrapper {
 
 							var statField = typeof(TileInfo).GetField(splitElement[0]);
 
-							if (splitElement[0] == "type")
-								continue;
-							else if (splitElement[0] == "id")
+							if ((splitElement[0] == "Shine" && int.Parse(splitElement[1]) > 0) || tileName.Contains("Ore"))
+								oreTile = true;
+							else if (splitElement[0] == "id" || splitElement[0] == "type")
 								continue;
 							else if (statField == null) {
 								mod.Logger.Debug($"Tile field not found or invalid field! -> {splitElement[0]}");
@@ -454,11 +459,36 @@ namespace tConfigWrapper {
 				}
 
 				if (tileTexture != null) {
-					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, tileTexture), "tConfigWrapper/DataTemplates/MissingTexture");
+					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture);
+					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
+					if (oreTile)
+						recipeTiles.Add(baseTile, true);
+					else
+						recipeTiles.Add(baseTile, false);
 				}
 
 				if (logTileAndName)
 					mod.Logger.Debug($"{modName}: {tileName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
+			}
+		}
+
+		public static void GetTileMapEntries() {
+			foreach (var modTile in recipeTiles) {
+				Texture2D tileTex = Main.tileTexture[modTile.Key.Type];
+				Color[] colors = new Color[tileTex.Width * tileTex.Height];
+				tileTex.GetData(colors);
+				int r = colors.Sum(x => x.R) / colors.Length;
+				int g = colors.Sum(x => x.G) / colors.Length;
+				int b = colors.Sum(x => x.B) / colors.Length;
+				var mainColor = colors.GroupBy(col => new Color(col.R, col.G, col.B))
+					.OrderByDescending(grp => grp.Count())
+					.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
+					.Select(grp => grp.Key)
+					.First();
+				if (modTile.Value)
+					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Key.Name));
+				else
+					modTile.Key.AddMapEntry(mainColor);
 			}
 		}
 	}

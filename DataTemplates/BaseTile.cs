@@ -1,8 +1,9 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
-using SevenZip;
-using System.IO;
+using Microsoft.Xna.Framework;
+using System.Linq;
 using System.Reflection;
 using Terraria;
+using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper.DataTemplates {
@@ -10,7 +11,8 @@ namespace tConfigWrapper.DataTemplates {
 
 		private TileInfo _info;
 		private readonly string _internalName;
-		private Texture2D _texture;
+		private readonly Texture2D _texture;
+		public Color modeColor;
 
 		public BaseTile() { }
 
@@ -22,6 +24,18 @@ namespace tConfigWrapper.DataTemplates {
 
 		public override void SetDefaults() {
 			SetDefaultsFromInfo();
+			/*Color[] colors = new Color[_texture.Width * _texture.Height];
+			_texture.GetData(colors);
+			int r = colors.Sum(x => x.R) / colors.Length;
+			int g = colors.Sum(x => x.G) / colors.Length;
+			int b = colors.Sum(x => x.B) / colors.Length;
+			int a = colors.Sum(x => x.A) / colors.Length;
+			var mainColor = colors.GroupBy(col => new Color(col.R, col.G, col.B))
+				.OrderByDescending(grp => grp.Count())
+				.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
+				.Select(grp => grp.Key)
+				.First();
+			AddMapEntry(mainColor, Language.GetText(_internalName));*/
 		}
 
 		public override void PostSetDefaults() {
@@ -39,7 +53,7 @@ namespace tConfigWrapper.DataTemplates {
 			var infoFields = typeof(TileInfo).GetFields();
 			foreach (FieldInfo field in infoFields) {
 				var infoFieldValue = field.GetValue(_info);
-				var tileField = typeof(Tile).GetField(field.Name);
+				var tileField = typeof(ModTile).GetField(field.Name);
 
 				if (infoFieldValue != null)
 					tileField.SetValue(this, infoFieldValue);

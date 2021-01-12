@@ -39,6 +39,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void PostAddRecipes() {
+			LoadStep.GetTileMapEntries();
 			if (ReportErrors && CheckForInternetConnection() && ModContent.GetInstance<WrapperModConfig>().SendConfig)
 				UploadLogs();
 		}
