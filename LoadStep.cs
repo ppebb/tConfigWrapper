@@ -122,25 +122,27 @@ namespace tConfigWrapper {
 			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
 			loadProgress.Invoke(0f);
 			int progressCount = 0;
+			bool initialized = (bool)Assembly.GetAssembly(typeof(Mod)).GetType("Terraria.ModLoader.MapLoader").GetField("initialized", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
 			foreach (var iniFileSection in recipeDict) {
 				progressCount++;
 				string modName = iniFileSection.Key.Split(':')[0];
-				ModRecipe recipe = new ModRecipe(mod);
+				ModRecipe recipe = null;
+				if (initialized)
+					recipe = new ModRecipe(mod);
 				foreach (var element in iniFileSection.Value.elements) {
 					string[] splitElement = element.Content.Split('=');
 					string key = splitElement[0];
 					string value = splitElement[1];
-
-					if (key == "Amount") {
+					if (key == "Amount" && initialized) {
 						int id;
 						if ((id = ItemID.FromLegacyName(iniFileSection.Key.Split(':')[1], 4)) != 0)
-							recipe.SetResult(id, int.Parse(value));
+							recipe?.SetResult(id, int.Parse(value));
 						else
-							recipe.SetResult(mod, iniFileSection.Key, int.Parse(value));
+							recipe?.SetResult(mod, iniFileSection.Key, int.Parse(value));
 					}
-					else if (key == "needWater")
+					else if (key == "needWater" && initialized)
 						recipe.needWater = bool.Parse(value);
-					else if (key == "Items") {
+					else if (key == "Items" && initialized) {
 						foreach (string recipeItem in value.Split(',')) {
 							var recipeItemInfo = recipeItem.Split(null, 2);
 							int amount = int.Parse(recipeItemInfo[0]);
@@ -150,9 +152,9 @@ namespace tConfigWrapper {
 								itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
 
 
-							var numberIngredients = recipe.requiredItem.Count(i => i != null & i.type != ItemID.None);
+							var numberIngredients = recipe?.requiredItem.Count(i => i != null & i.type != ItemID.None);
 							if (numberIngredients < 14)
-								recipe.AddIngredient(itemID, amount);
+								recipe?.AddIngredient(itemID, amount);
 							else {
 								mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
 								tConfigWrapper.ReportErrors = true;
@@ -165,27 +167,34 @@ namespace tConfigWrapper {
 							int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
 							var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
 							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) && tileInt == 0) {
-								mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
-								tConfigWrapper.ReportErrors = true;
+								if (initialized) {
+									mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+									tConfigWrapper.ReportErrors = true;
+								}
 							}
 							else if (CheckStringConversion(noSpaceTile)) {
 								string converted = ConvertTileStringTo14(noSpaceTile);
-								recipe.AddTile(TileID.Search.GetId(converted));
+								if (initialized)
+									recipe?.AddTile(TileID.Search.GetId(converted));
 							}
 							else if (tileInt != 0) {
-								recipe.AddTile(tileModTile);
-								DisplayName preserveName = tileMapData[tileModTile];
-								tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
-								mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+								if (initialized) {
+									recipe?.AddTile(tileModTile);
+									mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+								}
+								else {
+									DisplayName preserveName = tileMapData[tileModTile];
+									tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+								}
 							}
-							else {
-								recipe.AddTile(TileID.Search.GetId(noSpaceTile));
+							else if (initialized) {
+								recipe?.AddTile(TileID.Search.GetId(noSpaceTile));
 							}
 						}
 					}
 				}
 
-				if (recipe.createItem != null && recipe.createItem.type != ItemID.None)
+				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
 					recipe.AddRecipe();
 				loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
@@ -434,9 +443,8 @@ namespace tConfigWrapper {
 
 				object info = new TileInfo();
 
-				string tileName = Path.GetFileNameWithoutExtension(fileName.Replace(" ", ""));
-				tileName = tileName.Replace("'", "");
-				string internalName = $"{modName}:{tileName}";
+				string displayName = Path.GetFileNameWithoutExtension(fileName);
+				string internalName = $"{modName}:{displayName.Replace(" ", "").Replace("'", "")}";
 				bool logTileAndName = false;
 				bool oreTile = false;
 
@@ -448,7 +456,7 @@ namespace tConfigWrapper {
 							string converted = ConvertField14(splitElement[0]);
 							var statField = typeof(TileInfo).GetField(converted);
 
-							if ((converted == "tileShine" && splitElement[1] != "0") || tileName.Contains("Ore"))
+							if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
 								oreTile = true;
 
 							if (converted == "DropName") {
@@ -511,22 +519,23 @@ namespace tConfigWrapper {
 				}
 
 				if (tileTexture != null) {
-					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields), "tConfigWrapper/DataTemplates/MissingTexture");
-					ModTile dictTile = mod.GetTile(internalName);
+					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields);
+					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
 					if (oreTile)
-						tileMapData.Add(dictTile, new DisplayName(true, tileName));
+						tileMapData.Add(baseTile, new DisplayName(true, displayName));
 					else
-						tileMapData.Add(dictTile, new DisplayName(false, tileName));
+						tileMapData.Add(baseTile, new DisplayName(false, displayName));
 				}
 
 				if (logTileAndName)
-					mod.Logger.Debug($"{modName}: {tileName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
+					mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 			}
 		}
 
 		public static void GetTileMapEntries() {
 			loadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
 			loadProgress?.Invoke(0f);
+			SetupRecipes();
 			int iterationCount = 0;
 			foreach (var modTile in tileMapData) {
 				iterationCount++;

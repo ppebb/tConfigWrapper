@@ -38,8 +38,11 @@ namespace tConfigWrapper {
 			LoadStep.SetupRecipes();
 		}
 
-		public override void PostAddRecipes() {
+		public override void PostSetupContent() {
 			LoadStep.GetTileMapEntries();
+		}
+
+		public override void PostAddRecipes() {
 			if (ReportErrors && CheckForInternetConnection() && ModContent.GetInstance<WrapperModConfig>().SendConfig)
 				UploadLogs();
 		}
