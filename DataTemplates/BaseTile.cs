@@ -1,9 +1,8 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework;
-using System.Linq;
+using System.Collections.Generic;
 using System.Reflection;
 using Terraria;
-using Terraria.Localization;
+using Terraria.ObjectData;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper.DataTemplates {
@@ -12,30 +11,37 @@ namespace tConfigWrapper.DataTemplates {
 		private TileInfo _info;
 		private readonly string _internalName;
 		private readonly Texture2D _texture;
-		public Color modeColor;
+		private readonly Dictionary<string, bool> _tileBoolFields = new Dictionary<string, bool>();
+		private readonly Dictionary<string, int> _tileNumberFields = new Dictionary<string, int>();
 
 		public BaseTile() { }
 
-		public BaseTile(TileInfo info, string internalName, Texture2D texture) {
+		public BaseTile(TileInfo info, string internalName, Texture2D texture, Dictionary<string, bool> tileBoolFields, Dictionary<string, int> tileNumberFields) {
 			_info = info;
 			_internalName = internalName;
 			_texture = texture;
+			_tileBoolFields = tileBoolFields;
+			_tileNumberFields = tileNumberFields;
 		}
 
 		public override void SetDefaults() {
 			SetDefaultsFromInfo();
-			/*Color[] colors = new Color[_texture.Width * _texture.Height];
-			_texture.GetData(colors);
-			int r = colors.Sum(x => x.R) / colors.Length;
-			int g = colors.Sum(x => x.G) / colors.Length;
-			int b = colors.Sum(x => x.B) / colors.Length;
-			int a = colors.Sum(x => x.A) / colors.Length;
-			var mainColor = colors.GroupBy(col => new Color(col.R, col.G, col.B))
-				.OrderByDescending(grp => grp.Count())
-				.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
-				.Select(grp => grp.Key)
-				.First();
-			AddMapEntry(mainColor, Language.GetText(_internalName));*/
+			_tileBoolFields.TryGetValue("FrameImportant", out bool frameImportant);
+			if (frameImportant) {
+				TileObjectData.newTile.Width = _tileNumberFields["Width"];
+				TileObjectData.newTile.Height = _tileNumberFields["Height"];
+				TileObjectData.addTile(Type);
+			}
+			foreach (var field in _tileBoolFields) {
+				if (field.Key != "chair" || field.Key != "table" || field.Key != "torch" || field.Key != "door") { // this code is probably incredibly slow, oh well!
+					FieldInfo statField = typeof(Main).GetField(field.Key);
+					if (statField != null) {
+						bool[] mainArray = (bool[])statField.GetValue(null);
+						mainArray[Type] = field.Value;
+						statField.SetValue(null, mainArray);
+					}
+				}
+			}
 		}
 
 		public override void PostSetDefaults() {

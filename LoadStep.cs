@@ -25,7 +25,7 @@ namespace tConfigWrapper {
 
 		private static Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
 
-		public static Dictionary<ModTile, bool> recipeTiles = new Dictionary<ModTile, bool>();
+		public static Dictionary<ModTile, DisplayName> tileMapData = new Dictionary<ModTile, DisplayName>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
@@ -162,7 +162,9 @@ namespace tConfigWrapper {
 					else if (key == "Tiles") {
 						foreach (string recipeTile in value.Split(',')) {
 							string noSpaceTile = recipeTile.Replace(" ", "");
-							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) && mod.TileType($"{modName}:{noSpaceTile}") == 0) {
+							int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
+							var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
+							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) && tileInt == 0) {
 								mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
 								tConfigWrapper.ReportErrors = true;
 							}
@@ -170,10 +172,11 @@ namespace tConfigWrapper {
 								string converted = ConvertTileStringTo14(noSpaceTile);
 								recipe.AddTile(TileID.Search.GetId(converted));
 							}
-							else if (mod.TileType($"{modName}:{noSpaceTile}") != 0) {
-								recipe.AddTile(mod.TileType($"{modName}:{noSpaceTile}"));
-								recipeTiles[mod.GetTile($"{modName}:{noSpaceTile}")] = true;
-								mod.Logger.Debug($"{noSpaceTile} added to recipe through mod.TileType!");
+							else if (tileInt != 0) {
+								recipe.AddTile(tileModTile);
+								DisplayName preserveName = tileMapData[tileModTile];
+								tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+								mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
 							}
 							else {
 								recipe.AddTile(TileID.Search.GetId(noSpaceTile));
@@ -201,10 +204,12 @@ namespace tConfigWrapper {
 				return "Bottles";
 			else if (noSpaceTile == "Bookcase")
 				return "Bookcases";
+			else if (noSpaceTile == "Table")
+				return "Tables";
 			return noSpaceTile;
 		}
 
-		private static bool CheckStringConversion(string noSpaceTile) => noSpaceTile == "Anvil" || noSpaceTile == "WorkBench" || noSpaceTile == "Workbench" || noSpaceTile == "Furnace" || noSpaceTile == "Tinkerer'sWorkshop" || noSpaceTile == "Bottle" || noSpaceTile == "Bookcase";
+		private static bool CheckStringConversion(string noSpaceTile) => noSpaceTile == "Anvil" || noSpaceTile == "WorkBench" || noSpaceTile == "Workbench" || noSpaceTile == "Furnace" || noSpaceTile == "Tinkerer'sWorkshop" || noSpaceTile == "Bottle" || noSpaceTile == "Bookcase" || noSpaceTile == "Table";
 
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
 			using (MemoryStream iniStream = new MemoryStream()) {
@@ -404,10 +409,22 @@ namespace tConfigWrapper {
 		private static string ConvertField14(string splitElement) {
 			if (splitElement == "knockBackResist")
 				return "knockBackResist";
+			else if (splitElement == "hitSoundList")
+				return "soundStyle";
+			else if (splitElement == "hitSound")
+				return "soundType";
+			else if (splitElement == "pick" || splitElement == "axe" || splitElement == "hammer")
+				return "mineResist";
+			else if (splitElement == "Shine")
+				return "tileShine";
+			else if (splitElement == "Shine2")
+				return "tileShine2";
 			return splitElement;
 		}
 
 		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
+			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
+			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
 			using (MemoryStream iniSteam = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniSteam);
 				iniSteam.Position = 0L;
@@ -418,6 +435,7 @@ namespace tConfigWrapper {
 				object info = new TileInfo();
 
 				string tileName = Path.GetFileNameWithoutExtension(fileName.Replace(" ", ""));
+				tileName = tileName.Replace("'", "");
 				string internalName = $"{modName}:{tileName}";
 				bool logTileAndName = false;
 				bool oreTile = false;
@@ -427,14 +445,48 @@ namespace tConfigWrapper {
 						if (section.Name == "Stats") {
 							var splitElement = element.Content.Split('=');
 
-							var statField = typeof(TileInfo).GetField(splitElement[0]);
+							string converted = ConvertField14(splitElement[0]);
+							var statField = typeof(TileInfo).GetField(converted);
 
-							if ((splitElement[0] == "Shine" && int.Parse(splitElement[1]) > 0) || tileName.Contains("Ore"))
+							if ((converted == "tileShine" && splitElement[1] != "0") || tileName.Contains("Ore"))
 								oreTile = true;
-							else if (splitElement[0] == "id" || splitElement[0] == "type")
+
+							if (converted == "DropName") {
+								splitElement[1] = splitElement[1].Replace(" ", "");
+								statField = typeof(TileInfo).GetField("drop");
+								statField.SetValue(info, mod.TileType(splitElement[1]));
+								continue;
+							}
+							else if (converted == "minPick" || converted == "minAxe" || converted == "minHammer") {
+								if (converted == "minAxe")
+									splitElement[1] = (int.Parse(splitElement[1]) * 5).ToString();
+								statField = typeof(TileInfo).GetField("minPick");
+								int splitInt = int.Parse(splitElement[1]);
+								statField.SetValue(info, splitInt);
+								continue;
+							}
+							else if (converted == "Width" || converted == "Height" || converted == "tileShine") {
+								tileNumberFields.Add(converted, int.Parse(splitElement[1]));
+								continue;
+							}
+							else if (converted == "Lighted" || converted == "MergeDirt" || converted == "Cut" || converted == "Alch" || converted == "tileShine2" || converted == "Stone" || converted == "WaterDeath" || converted == "LavaDeath" || converted == "Table" || converted == "BlockLight" || converted == "NoSunLight" || converted == "Dungeon" || converted == "SolidTop" || converted == "Solid" || converted == "NoAttatch" || converted == "NoFail" || converted == "FrameImportanrt") {
+								tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
+								continue;
+							}
+							else if (converted == "furniture") {
+								if (splitElement[1] == "table")
+									tileBoolFields.Add(splitElement[1], true);
+								else if (splitElement[1] == "chair")
+									tileBoolFields.Add(splitElement[1], true);
+								else if (splitElement[1] == "door")
+									tileBoolFields.Add(splitElement[1], true);
+								else if (splitElement[1] == "torch")
+									tileBoolFields.Add(splitElement[1], true);
+							}
+							else if (converted == "id" || converted == "type" || (converted == "mineResist" && splitElement[1] == "0"))
 								continue;
 							else if (statField == null) {
-								mod.Logger.Debug($"Tile field not found or invalid field! -> {splitElement[0]}");
+								mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
 								logTileAndName = true;
 								tConfigWrapper.ReportErrors = true;
 								continue;
@@ -459,12 +511,12 @@ namespace tConfigWrapper {
 				}
 
 				if (tileTexture != null) {
-					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture);
-					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
+					mod.AddTile(internalName, new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields), "tConfigWrapper/DataTemplates/MissingTexture");
+					ModTile dictTile = mod.GetTile(internalName);
 					if (oreTile)
-						recipeTiles.Add(baseTile, true);
+						tileMapData.Add(dictTile, new DisplayName(true, tileName));
 					else
-						recipeTiles.Add(baseTile, false);
+						tileMapData.Add(dictTile, new DisplayName(false, tileName));
 				}
 
 				if (logTileAndName)
@@ -473,7 +525,12 @@ namespace tConfigWrapper {
 		}
 
 		public static void GetTileMapEntries() {
-			foreach (var modTile in recipeTiles) {
+			loadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
+			loadProgress?.Invoke(0f);
+			int iterationCount = 0;
+			foreach (var modTile in tileMapData) {
+				iterationCount++;
+				loadSubProgressText?.Invoke($"{modTile.Value.Name}");
 				Texture2D tileTex = Main.tileTexture[modTile.Key.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
@@ -485,10 +542,15 @@ namespace tConfigWrapper {
 					.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
 					.Select(grp => grp.Key)
 					.First();
-				if (modTile.Value)
-					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Key.Name));
-				else
+				if (modTile.Value.DoDisplayName) {
+					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Value.Name));
+					mod.Logger.Debug($"Added translation and color for {modTile.Value.Name}");
+				}
+				else {
 					modTile.Key.AddMapEntry(mainColor);
+					mod.Logger.Debug($"Added color for {modTile.Value.Name}");
+				}
+				loadProgress?.Invoke(iterationCount / tileMapData.Count);
 			}
 		}
 	}
