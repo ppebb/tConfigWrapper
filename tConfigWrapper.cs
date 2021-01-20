@@ -46,7 +46,7 @@ namespace tConfigWrapper {
 
 		public override void PostAddRecipes() {
 			if (ReportErrors && ModContent.GetInstance<WrapperModConfig>().SendConfig)
-				ThreadPool.QueueUserWorkItem(UploadLogs);
+				ThreadPool.QueueUserWorkItem(UploadLogs, 0);
 		}
 
 		public override void Unload() {
@@ -66,16 +66,13 @@ namespace tConfigWrapper {
 		public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers) {
 			int mouseTextIndex = layers.FindIndex(layer => layer.Name.Equals("Vanilla: Mouse Text"));
 			if (mouseTextIndex != -1) {
-				layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer(
-					"tConfigWrapper: A Description",
+				layers.Insert(mouseTextIndex, new LegacyGameInterfaceLayer("tConfigWrapper: A Description",
 					delegate {
 						if (!Main.gameMenu)
 							return true;
-
 						_tCFModMenu.Draw(Main.spriteBatch, new GameTime());
 						return true;
-					},
-					InterfaceScaleType.UI)
+					}, InterfaceScaleType.UI)
 				);
 			}
 		}
@@ -85,7 +82,7 @@ namespace tConfigWrapper {
 				using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", Main.dedServ ? "server.log" : "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 					using (StreamReader reader = new StreamReader(fileStream, Encoding.Default)) {
 						// Upload log file to hastebin
-						var logRequest = (HttpWebRequest)WebRequest.Create(@"https://hastebin.com/documents");
+						var logRequest = (HttpWebRequest)WebRequest.Create((int)stateInfo == 0 ? @"http://paste.mod.gg/documents" : @"http://hastebin.com/documents");
 						//logRequest.Headers.Add("user-agent", "tConfig Wrapper?");
 						logRequest.UserAgent = "tConfig Wrapper?";
 						logRequest.Method = "POST";
@@ -100,7 +97,7 @@ namespace tConfigWrapper {
 						var logResponse = (HttpWebResponse)logRequest.GetResponse();
 						var logResponseString = new StreamReader(logResponse.GetResponseStream()).ReadToEnd();
 						logResponseString = logResponseString.Split(':')[1].Replace("}", "").Replace("\"", "");
-						logResponseString = $"https://hastebin.com/{logResponseString}";
+						logResponseString = (int)stateInfo == 0 ? $"https://paste.mod.gg/{logResponseString}" : $"https://paste.mod.gg/{logResponseString}";
 
 						// Send link to discord via a webhook
 						var discordRequest = (HttpWebRequest)WebRequest.Create(@"https://discord.com/api/webhooks/797477719301947432/pB9jjZt4km7baBFfiC2oAn5twSBVCitjwVxuoRRvMC8G7UjXfqyIY28LvXOjuUWMWmvJ");
@@ -120,6 +117,12 @@ namespace tConfigWrapper {
 			}
 			catch {
 				FailedToSendLogs = true;
+				if (FailedToSendLogs && (int)stateInfo == 0) {
+					FailedToSendLogs = false;
+					UploadLogs(1);
+				}
+				if (FailedToSendLogs && (int)stateInfo == 1)
+					ModContent.GetInstance<tConfigWrapper>().Logger.Debug("Failed to upload logs with both hastebin and pastebin!");
 				//Main.spriteBatch.Begin();
 				//Main.spriteBatch.DrawString(Main.fontMouseText, "Failed to upload logs", new Vector2(25, 10), Color.Cyan);
 				//Main.spriteBatch.End();
@@ -133,7 +136,13 @@ namespace tConfigWrapper {
 			Main.spriteBatch.Begin();
 			if (FailedToSendLogs & drawLogFailMessageTimer < 360){
 				drawLogFailMessageTimer++;
-				Main.spriteBatch.DrawString(Main.fontMouseText, "Failed to upload logs", new Vector2(25, 10), Color.Cyan);
+				Main.spriteBatch.DrawString(Main.fontMouseText, "Failed to upload logs\nClick here to try again", new Vector2(25, 10), Color.Cyan);
+				Vector2 stringPixelSize = Main.fontMouseText.MeasureString("Failed to upload logs\nClick here to try again");
+				Rectangle die = new Rectangle(25, 10, (int)stringPixelSize.X, (int)stringPixelSize.Y);
+				if (die.Contains(Main.MouseScreen.ToPoint()) && Main.mouseLeft && Main.mouseLeftRelease) {
+					UploadLogs(0);
+					FailedToSendLogs = false;
+				}
 			}
 			Main.spriteBatch.DrawString(Main.fontMouseText, Main.menuMode.ToString(), new Vector2(10, 10), Color.Cyan);
 			Main.spriteBatch.End();

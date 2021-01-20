@@ -2,3 +2,4 @@ displayName = tConfig Wrapper
 author = pollen__
 version = 0.1
 dllReferences = SevenZipSharp, Gajatko
+includePDB = true

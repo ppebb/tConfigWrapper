@@ -23,7 +23,7 @@ namespace tConfigWrapper {
 		public static Action<string> loadSubProgressText;
 		internal static Dictionary<int, ItemInfo> globalItemInfos = new Dictionary<int, ItemInfo>();
 
-		private static Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
+		private static readonly Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
 
 		public static Dictionary<ModTile, DisplayName> tileMapData = new Dictionary<ModTile, DisplayName>();
 
@@ -38,7 +38,7 @@ namespace tConfigWrapper {
 			PropertyInfo ProgressProperty = UILoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
 			PropertyInfo SubProgressTextProperty = UILoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
 
-			loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
+			loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] {s, -1});
 			loadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
 			loadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
 
@@ -46,15 +46,13 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 
 			files = Directory.GetFiles(tConfigWrapper.ModsPath);
-			for (int i = 0; i < files.Length; i++) {
-				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])} is enabled!");
-			}
+			foreach (var modName in files)
+				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!");
 
 			for (int i = 0; i < files.Length; i++) {
 				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
-				Stream stream;
-				using (stream = new MemoryStream()) {
+				using (Stream stream = new MemoryStream()) {
 					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
 						// Note for pollen, when you have a stream, at the end you have to dispose it
 						// There are two ways to do this, calling .Dispose(), or using "using (Stream whatever ...) { ... }"
@@ -112,6 +110,7 @@ namespace tConfigWrapper {
 					//}
 				}
 			}
+
 			//Reset progress bar
 			loadSubProgressText?.Invoke("");
 			loadProgressText?.Invoke("Loading mod");
@@ -133,63 +132,75 @@ namespace tConfigWrapper {
 					string[] splitElement = element.Content.Split('=');
 					string key = splitElement[0];
 					string value = splitElement[1];
-					if (key == "Amount" && initialized) {
-						int id;
-						if ((id = ItemID.FromLegacyName(iniFileSection.Key.Split(':')[1], 4)) != 0)
-							recipe?.SetResult(id, int.Parse(value));
-						else
-							recipe?.SetResult(mod, iniFileSection.Key, int.Parse(value));
-					}
-					else if (key == "needWater" && initialized)
-						recipe.needWater = bool.Parse(value);
-					else if (key == "Items" && initialized) {
-						foreach (string recipeItem in value.Split(',')) {
-							var recipeItemInfo = recipeItem.Split(null, 2);
-							int amount = int.Parse(recipeItemInfo[0]);
-
-							int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1]}");
-							if (itemID == 0)
-								itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
-
-
-							var numberIngredients = recipe?.requiredItem.Count(i => i != null & i.type != ItemID.None);
-							if (numberIngredients < 14)
-								recipe?.AddIngredient(itemID, amount);
-							else {
-								mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
-								tConfigWrapper.ReportErrors = true;
-							}
+					switch (key) {
+						case "Amount" when initialized: {
+							int id;
+							if ((id = ItemID.FromLegacyName(iniFileSection.Key.Split(':')[1], 4)) != 0)
+								recipe?.SetResult(id, int.Parse(value));
+							else
+								recipe?.SetResult(mod, iniFileSection.Key, int.Parse(value));
+							break;
 						}
-					}
-					else if (key == "Tiles") {
-						foreach (string recipeTile in value.Split(',')) {
-							string noSpaceTile = recipeTile.Replace(" ", "");
-							int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
-							var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
-							if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) && tileInt == 0) {
-								if (initialized) {
-									mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+						case "needWater" when initialized:
+							recipe.needWater = bool.Parse(value);
+							break;
+						case "Items" when initialized: {
+							foreach (string recipeItem in value.Split(',')) {
+								var recipeItemInfo = recipeItem.Split(null, 2);
+								int amount = int.Parse(recipeItemInfo[0]);
+
+								int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1]}");
+								if (itemID == 0)
+									itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
+
+								var numberIngredients =
+									recipe?.requiredItem.Count(i => i != null & i.type != ItemID.None);
+								if (numberIngredients < 14)
+									recipe?.AddIngredient(itemID, amount);
+								else {
+									mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
 									tConfigWrapper.ReportErrors = true;
 								}
 							}
-							else if (CheckStringConversion(noSpaceTile)) {
-								string converted = ConvertTileStringTo14(noSpaceTile);
-								if (initialized)
-									recipe?.AddTile(TileID.Search.GetId(converted));
-							}
-							else if (tileInt != 0) {
-								if (initialized) {
-									recipe?.AddTile(tileModTile);
-									mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+							break;
+						}
+						case "Tiles": {
+							foreach (string recipeTile in value.Split(',')) {
+								string noSpaceTile = recipeTile.Replace(" ", "");
+								int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
+								var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
+								if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) &&
+								    tileInt == 0) {
+									if (initialized) {
+										mod.Logger.Debug(
+											$"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+										tConfigWrapper.ReportErrors = true;
+									}
 								}
-								else {
-									DisplayName preserveName = tileMapData[tileModTile];
-									tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+								else if (CheckStringConversion(noSpaceTile)) {
+									string converted = ConvertTileStringTo14(noSpaceTile);
+									if (initialized)
+										recipe?.AddTile(TileID.Search.GetId(converted));
 								}
+								else if (tileInt != 0) {
+									if (initialized) {
+										recipe?.AddTile(tileModTile);
+										mod.Logger.Debug(
+											$"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+									}
+									else {
+										DisplayName preserveName = tileMapData[tileModTile];
+										tileMapData[tileModTile] =
+											new DisplayName(true,
+												preserveName
+													.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+									}
+								}
+								else if (initialized)
+									recipe?.AddTile(TileID.Search.GetId(noSpaceTile));
 							}
-							else if (initialized) {
-								recipe?.AddTile(TileID.Search.GetId(noSpaceTile));
-							}
+
+							break;
 						}
 					}
 				}
@@ -201,24 +212,42 @@ namespace tConfigWrapper {
 		}
 
 		private static string ConvertTileStringTo14(string noSpaceTile) {
-			if (noSpaceTile == "Anvil")
-				return "Anvils";
-			else if (noSpaceTile == "WorkBench" || noSpaceTile == "Workbench")
-				return "WorkBenches";
-			else if (noSpaceTile == "Furnace")
-				return "Furnaces";
-			else if (noSpaceTile == "Tinkerer'sWorkshop")
-				return "TinkerersWorkbench";
-			else if (noSpaceTile == "Bottle")
-				return "Bottles";
-			else if (noSpaceTile == "Bookcase")
-				return "Bookcases";
-			else if (noSpaceTile == "Table")
-				return "Tables";
-			return noSpaceTile;
+			switch (noSpaceTile) {
+				case "Anvil":
+					return "Anvils";
+				case "WorkBench":
+				case "Workbench":
+					return "WorkBenches";
+				case "Furnace":
+					return "Furnaces";
+				case "Tinkerer'sWorkshop":
+					return "TinkerersWorkbench";
+				case "Bottle":
+					return "Bottles";
+				case "Bookcase":
+					return "Bookcases";
+				case "Table":
+					return "Tables";
+				default:
+					return noSpaceTile;
+			}
 		}
 
-		private static bool CheckStringConversion(string noSpaceTile) => noSpaceTile == "Anvil" || noSpaceTile == "WorkBench" || noSpaceTile == "Workbench" || noSpaceTile == "Furnace" || noSpaceTile == "Tinkerer'sWorkshop" || noSpaceTile == "Bottle" || noSpaceTile == "Bookcase" || noSpaceTile == "Table";
+		private static bool CheckStringConversion(string noSpaceTile) {
+			switch (noSpaceTile) {
+				case "Anvil":
+				case "WorkBench":
+				case "Workbench":
+				case "Furnace":
+				case "Tinkerer'sWorkshop":
+				case "Bottle":
+				case "Bookcase":
+				case "Table":
+					return true;
+				default:
+					return false;
+			}
+		}
 
 		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
 			using (MemoryStream iniStream = new MemoryStream()) {
@@ -238,62 +267,75 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						if (section.Name == "Stats") {
-							var splitElement = element.Content.Split('=');
+						switch (section.Name)
+						{
+							case "Stats":
+							{
+								var splitElement = element.Content.Split('=');
 
-							var statField = typeof(ItemInfo).GetField(splitElement[0]);
+								var statField = typeof(ItemInfo).GetField(splitElement[0]);
 
-							// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
-							if (splitElement[0] == "toolTip") {
-								tooltip = splitElement[1];
-								continue;
-							}
-							else if (splitElement[0] == "useSound") {
-								var soundStyleId = int.Parse(splitElement[1]);
-								var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
-								statField = typeof(ItemInfo).GetField("UseSound");
-								statField.SetValue(info, soundStyle);
-								continue;
-							}
-							else if (splitElement[0] == "createTileName") {
-								statField = typeof(ItemInfo).GetField("createTile");
-								var succeed = int.TryParse(splitElement[1], out var createTileID);
-								if (succeed) {
-									statField.SetValue(info, createTileID);
-									mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
-									logItemAndModName = true;
-								}
-								else {
-									int modTile = mod.TileType($"{modName}:{fileName}");
-									if (modTile != 0) {
-										statField.SetValue(info, modTile);
-										mod.Logger.Debug($"Mod tile {modTile} was successfully added");
-										logItemAndModName = true;
+								switch (splitElement[0])
+								{
+									// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
+									case "toolTip":
+										tooltip = splitElement[1];
+										continue;
+									case "useSound":
+									{
+										var soundStyleId = int.Parse(splitElement[1]);
+										var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
+										statField = typeof(ItemInfo).GetField("UseSound");
+										statField.SetValue(info, soundStyle);
+										continue;
 									}
-									else {
-										mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
-										logItemAndModName = true;
+									case "createTileName":
+									{
+										statField = typeof(ItemInfo).GetField("createTile");
+										var succeed = int.TryParse(splitElement[1], out var createTileID);
+										if (succeed) {
+											statField.SetValue(info, createTileID);
+											mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
+											logItemAndModName = true;
+										}
+										else {
+											int modTile = mod.TileType($"{modName}:{fileName}");
+											if (modTile != 0) {
+												statField.SetValue(info, modTile);
+												mod.Logger.Debug($"Mod tile {modTile} was successfully added");
+												logItemAndModName = true;
+											}
+											else {
+												mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
+												logItemAndModName = true;
+											}
+										}
+										continue;
+									}
+									case "type":
+										continue;
+									default: {
+										if (statField == null) {
+											mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
+											logItemAndModName = true;
+											tConfigWrapper.ReportErrors = true;
+											continue;
+										}
+										break;
 									}
 								}
-								continue;
-							}
-							else if (splitElement[0] == "type")
-								continue;
-							else if (statField == null) {
-								mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
-								logItemAndModName = true;
-								tConfigWrapper.ReportErrors = true;
-								continue;
-							}
 
-							// Convert the value to an object of type statField.FieldType
-							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
-							object realValue = converter.ConvertFromString(splitElement[1]);
-							statField.SetValue(info, realValue);
-						}
-						else if (section.Name == "Recipe") {
-							if (!recipeDict.ContainsKey(internalName))
-								recipeDict.Add(internalName, section);
+								// Convert the value to an object of type statField.FieldType
+								TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+								object realValue = converter.ConvertFromString(splitElement[1]);
+								statField.SetValue(info, realValue);
+								break;
+							}
+							case "Recipe": {
+								if (!recipeDict.ContainsKey(internalName))
+									recipeDict.Add(internalName, section);
+								break;
+							}
 						}
 					}
 				}
@@ -349,44 +391,58 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						if (section.Name == "Stats") {
-							var splitElement = element.Content.Split('=');
+						switch (section.Name)
+						{
+							case "Stats":
+							{
+								var splitElement = element.Content.Split('=');
 
-							string split1Correct = ConvertField14(splitElement[0]);
-							var statField = typeof(NpcInfo).GetField(split1Correct);
+								string split1Correct = ConvertField14(splitElement[0]);
+								var statField = typeof(NpcInfo).GetField(split1Correct);
 
-							if (splitElement[0] == "soundHit") {
-								var soundStyleID = int.Parse(splitElement[1]);
-								var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
-								statField = typeof(NpcInfo).GetField("HitSound");
-								statField.SetValue(info, soundStyle);
-								continue;
-							}
-							else if (splitElement[0] == "soundKilled") {
-								var soundStyleID = int.Parse(splitElement[1]);
-								var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
-								statField = typeof(NpcInfo).GetField("DeathSound");
-								statField.SetValue(info, soundStyle);
-								continue;
-							}
-							else if (splitElement[0] == "type")
-								continue;
-							else if (statField == null) {
-								mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
-								logNPCAndModName = true;
-								tConfigWrapper.ReportErrors = true;
-								continue;
-							}
+								switch (splitElement[0])
+								{
+									case "soundHit":
+									{
+										var soundStyleID = int.Parse(splitElement[1]);
+										var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
+										statField = typeof(NpcInfo).GetField("HitSound");
+										statField.SetValue(info, soundStyle);
+										continue;
+									}
+									case "soundKilled":
+									{
+										var soundStyleID = int.Parse(splitElement[1]);
+										var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
+										statField = typeof(NpcInfo).GetField("DeathSound");
+										statField.SetValue(info, soundStyle);
+										continue;
+									}
+									case "type":
+										continue;
+									default: {
+										if (statField == null) {
+											mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
+											logNPCAndModName = true;
+											tConfigWrapper.ReportErrors = true;
+											continue;
+										}
 
-							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
-							object realValue = converter.ConvertFromString(splitElement[1]);
-							statField.SetValue(info, realValue);
-						}
-						else if (section.Name == "BuffImmunities") {
-							// do
-						}
-						else if (section.Name == "Drops") {
-							// do
+										break;
+									}
+								}
+
+								TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+								object realValue = converter.ConvertFromString(splitElement[1]);
+								statField.SetValue(info, realValue);
+								break;
+							}
+							case "BuffImmunities":
+								// do
+								break;
+							case "Drops":
+								// do
+								break;
 						}
 					}
 				}
@@ -416,47 +472,52 @@ namespace tConfigWrapper {
 		}
 
 		private static string ConvertField14(string splitElement) {
-			if (splitElement == "knockBackResist")
-				return "knockBackResist";
-			else if (splitElement == "hitSoundList")
-				return "soundStyle";
-			else if (splitElement == "hitSound")
-				return "soundType";
-			else if (splitElement == "pick" || splitElement == "axe" || splitElement == "hammer")
-				return "mineResist";
-			else if (splitElement == "Shine")
-				return "tileShine";
-			else if (splitElement == "Shine2")
-				return "tileShine2";
-			else if (splitElement == "Lighted")
-				return "tileLighted";
-			else if (splitElement == "MergeDirt")
-				return "tileMergeDirt";
-			else if (splitElement == "Cut")
-				return "tileCut";
-			else if (splitElement == "Alch")
-				return "tileAlch";
-			else if (splitElement == "Stone")
-				return "tileStone";
-			else if (splitElement == "WaterDeath")
-				return "tileWaterDeath";
-			else if (splitElement == "LavaDeath")
-				return "tileLavaDeath";
-			else if (splitElement == "Table")
-				return "table";
-			else if (splitElement == "BlockLight")
-				return "tileBlockLight";
-			else if (splitElement == "NoSunLight")
-				return "tileNoSunLight";
-			else if (splitElement == "Dungeon")
-				return "tileDungeon";
-			else if (splitElement == "SolidTop")
-				return "tileSolidTop";
-			else if (splitElement == "Solid")
-				return "tileSolid";
-			else if (splitElement == "NoAttach")
-				return "tileNoAttach";
-			return splitElement;
+			switch (splitElement) {
+				case "knockBackResist":
+					return "knockBackResist";
+				case "hitSoundList":
+					return "soundStyle";
+				case "hitSound":
+					return "soundType";
+				case "pick":
+				case "axe":
+				case "hammer":
+					return "mineResist";
+				case "Shine":
+					return "tileShine";
+				case "Shine2":
+					return "tileShine2";
+				case "Lighted":
+					return "tileLighted";
+				case "MergeDirt":
+					return "tileMergeDirt";
+				case "Cut":
+					return "tileCut";
+				case "Alch":
+					return "tileAlch";
+				case "Stone":
+					return "tileStone";
+				case "WaterDeath":
+					return "tileWaterDeath";
+				case "LavaDeath":
+					return "tileLavaDeath";
+				case "Table":
+					return "table";
+				case "BlockLight":
+					return "tileBlockLight";
+				case "NoSunLight":
+					return "tileNoSunLight";
+				case "Dungeon":
+					return "tileDungeon";
+				case "SolidTop":
+					return "tileSolidTop";
+				case "Solid":
+					return "tileSolid";
+				case "NoAttach":
+					return "tileNoAttach";
+				default:
+					return splitElement;
+			}
 		}
 
 		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
@@ -488,39 +549,64 @@ namespace tConfigWrapper {
 							if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
 								oreTile = true;
 
-							if (converted == "DropName") {
-								splitElement[1] = splitElement[1].Replace(" ", "");
-								statField = typeof(TileInfo).GetField("drop");
-								statField.SetValue(info, mod.TileType(splitElement[1]));
-								continue;
-							}
-							else if (converted == "minPick" || converted == "minAxe" || converted == "minHammer") {
-								if (converted == "minAxe")
-									splitElement[1] = (int.Parse(splitElement[1]) * 5).ToString();
-								statField = typeof(TileInfo).GetField("minPick");
-								int splitInt = int.Parse(splitElement[1]);
-								statField.SetValue(info, splitInt);
-								continue;
-							}
-							else if (converted == "Width" || converted == "Height" || converted == "tileShine") {
-								tileNumberFields.Add(converted, int.Parse(splitElement[1]));
-								continue;
-							}
-							else if (converted == "tileLighted" || converted == "tileMergeDirt" || converted == "tileCut" || converted == "tileAlch" || converted == "tileShine2" || converted == "tileStone" || converted == "tileWaterDeath" || converted == "tileLavaDeath" || converted == "table" || converted == "tileBlockLight" || converted == "tileNoSunLight" || converted == "tileDungeon" || converted == "tileSolidTop" || converted == "tileSolid" || converted == "tileNoAttach" || converted == "tileNoFail" || converted == "tileFrameImportant") {
-								tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
-								continue;
-							}
-							//else if (converted == "furniture")  {
-							//	tileStringFields.Add(converted, splitElement[1]);
-							//	continue;
-							//}
-							else if (converted == "id" || converted == "type" || (converted == "mineResist" && splitElement[1] == "0"))
-								continue;
-							else if (statField == null) {
-								mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
-								logTileAndName = true;
-								tConfigWrapper.ReportErrors = true;
-								continue;
+							switch (converted)
+							{
+								case "DropName":
+									splitElement[1] = splitElement[1].Replace(" ", "");
+									statField = typeof(TileInfo).GetField("drop");
+									statField.SetValue(info, mod.TileType(splitElement[1]));
+									continue;
+								case "minPick":
+								case "minAxe":
+								case "minHammer": {
+									if (converted == "minAxe")
+										splitElement[1] = (int.Parse(splitElement[1]) * 5).ToString();
+									statField = typeof(TileInfo).GetField("minPick");
+									int splitInt = int.Parse(splitElement[1]);
+									statField.SetValue(info, splitInt);
+									continue;
+								}
+								case "Width":
+								case "Height":
+								case "tileShine":
+									tileNumberFields.Add(converted, int.Parse(splitElement[1]));
+									continue;
+								case "tileLighted":
+								case "tileMergeDirt":
+								case "tileCut":
+								case "tileAlch":
+								case "tileShine2":
+								case "tileStone":
+								case "tileWaterDeath":
+								case "tileLavaDeath":
+								case "table":
+								case "tileBlockLight":
+								case "tileNoSunLight":
+								case "tileDungeon":
+								case "tileSolidTop":
+								case "tileSolid":
+								case "tileNoAttach":
+								case "tileNoFail":
+								//else if (converted == "furniture")  {
+								//	tileStringFields.Add(converted, splitElement[1]);
+								//	continue;
+								//}
+								case "tileFrameImportant":
+									tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
+									continue;
+								case "id":
+								case "type":
+								case "mineResist" when splitElement[1] == "0":
+									continue;
+								default: {
+									if (statField == null) {
+										mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
+										logTileAndName = true;
+										tConfigWrapper.ReportErrors = true;
+										continue;
+										}
+									break;
+								}
 							}
 
 							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
