@@ -428,12 +428,41 @@ namespace tConfigWrapper {
 				return "tileShine";
 			else if (splitElement == "Shine2")
 				return "tileShine2";
+			else if (splitElement == "Lighted")
+				return "tileLighted";
+			else if (splitElement == "MergeDirt")
+				return "tileMergeDirt";
+			else if (splitElement == "Cut")
+				return "tileCut";
+			else if (splitElement == "Alch")
+				return "tileAlch";
+			else if (splitElement == "Stone")
+				return "tileStone";
+			else if (splitElement == "WaterDeath")
+				return "tileWaterDeath";
+			else if (splitElement == "LavaDeath")
+				return "tileLavaDeath";
+			else if (splitElement == "Table")
+				return "table";
+			else if (splitElement == "BlockLight")
+				return "tileBlockLight";
+			else if (splitElement == "NoSunLight")
+				return "tileNoSunLight";
+			else if (splitElement == "Dungeon")
+				return "tileDungeon";
+			else if (splitElement == "SolidTop")
+				return "tileSolidTop";
+			else if (splitElement == "Solid")
+				return "tileSolid";
+			else if (splitElement == "NoAttach")
+				return "tileNoAttach";
 			return splitElement;
 		}
 
 		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
 			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
+			Dictionary<string, string> tileStringFields = new Dictionary<string, string>();
 			using (MemoryStream iniSteam = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniSteam);
 				iniSteam.Position = 0L;
@@ -477,20 +506,14 @@ namespace tConfigWrapper {
 								tileNumberFields.Add(converted, int.Parse(splitElement[1]));
 								continue;
 							}
-							else if (converted == "Lighted" || converted == "MergeDirt" || converted == "Cut" || converted == "Alch" || converted == "tileShine2" || converted == "Stone" || converted == "WaterDeath" || converted == "LavaDeath" || converted == "Table" || converted == "BlockLight" || converted == "NoSunLight" || converted == "Dungeon" || converted == "SolidTop" || converted == "Solid" || converted == "NoAttatch" || converted == "NoFail" || converted == "FrameImportanrt") {
+							else if (converted == "tileLighted" || converted == "tileMergeDirt" || converted == "tileCut" || converted == "tileAlch" || converted == "tileShine2" || converted == "tileStone" || converted == "tileWaterDeath" || converted == "tileLavaDeath" || converted == "table" || converted == "tileBlockLight" || converted == "tileNoSunLight" || converted == "tileDungeon" || converted == "tileSolidTop" || converted == "tileSolid" || converted == "tileNoAttach" || converted == "tileNoFail" || converted == "tileFrameImportant") {
 								tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
 								continue;
 							}
-							else if (converted == "furniture") {
-								if (splitElement[1] == "table")
-									tileBoolFields.Add(splitElement[1], true);
-								else if (splitElement[1] == "chair")
-									tileBoolFields.Add(splitElement[1], true);
-								else if (splitElement[1] == "door")
-									tileBoolFields.Add(splitElement[1], true);
-								else if (splitElement[1] == "torch")
-									tileBoolFields.Add(splitElement[1], true);
-							}
+							//else if (converted == "furniture")  {
+							//	tileStringFields.Add(converted, splitElement[1]);
+							//	continue;
+							//}
 							else if (converted == "id" || converted == "type" || (converted == "mineResist" && splitElement[1] == "0"))
 								continue;
 							else if (statField == null) {
@@ -519,7 +542,7 @@ namespace tConfigWrapper {
 				}
 
 				if (tileTexture != null) {
-					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields);
+					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
 					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
 					if (oreTile)
 						tileMapData.Add(baseTile, new DisplayName(true, displayName));
