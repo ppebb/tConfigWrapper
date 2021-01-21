@@ -53,7 +53,7 @@ namespace tConfigWrapper {
 			loadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
 			loadProgress?.Invoke(0f);
 
-			files = Directory.GetFiles(tConfigWrapper.ModsPath);
+			files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj");
 			foreach (var modName in files)
 				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!");
 
