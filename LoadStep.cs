@@ -3,11 +3,13 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using tConfigWrapper.DataTemplates;
 using Terraria;
 using Terraria.Audio;
@@ -21,15 +23,20 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
-		internal static Dictionary<int, ItemInfo> globalItemInfos = new Dictionary<int, ItemInfo>();
+		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 
-		private static readonly Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
+		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
+		private static readonly ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
+		private static readonly ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
+		private static readonly ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
 
-		public static Dictionary<ModTile, DisplayName> tileMapData = new Dictionary<ModTile, DisplayName>();
+		public static ConcurrentDictionary<ModTile, DisplayName> tileMapData = new ConcurrentDictionary<ModTile, DisplayName>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
+			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
+
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
@@ -52,63 +59,86 @@ namespace tConfigWrapper {
 			for (int i = 0; i < files.Length; i++) {
 				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
-				using (Stream stream = new MemoryStream()) {
-					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
-						// Note for pollen, when you have a stream, at the end you have to dispose it
-						// There are two ways to do this, calling .Dispose(), or using "using (Stream whatever ...) { ... }"
-						// The "using" way is better because it will always Dispose it, even if there's an exception
+				using (var finished = new CountdownEvent(1))
+				using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
+					MemoryStream configStream = new MemoryStream();
+					extractor.ExtractFile("Config.ini", configStream);
+					configStream.Position = 0L;
+					IniFileReader configReader = new IniFileReader(configStream);
+					IniFile configFile = IniFile.FromStream(configReader);
+					configStream.Dispose();
 
-						// Disposing via .Dispose()
-						MemoryStream configStream = new MemoryStream();
-						extractor.ExtractFile("Config.ini", configStream);
-						configStream.Position = 0L;
-						IniFileReader configReader = new IniFileReader(configStream);
-						IniFile configFile = IniFile.FromStream(configReader);
-						configStream.Dispose();
-						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
-						int numIterations = 0;
-						foreach (string fileName in extractor.ArchiveFileNames) {
-							loadSubProgressText?.Invoke(fileName);
-							numIterations++;
-							if (Path.GetExtension(fileName) != ".ini")
-								continue; // If the extension is not .ini, ignore the file
+					mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+					
+					itemsToLoad.Clear();
+					tilesToLoad.Clear();
+					npcsToLoad.Clear();
 
-							if (fileName.Contains("\\Item\\"))
-								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
+					int numIterations = 0;
+					foreach (string fileName in extractor.ArchiveFileNames) {
+						loadSubProgressText?.Invoke(fileName);
+						numIterations++;
+						if (Path.GetExtension(fileName) != ".ini")
+							continue; // If the extension is not .ini, ignore the file
 
-							else if (fileName.Contains("\\NPC\\"))
-								CreateNPC(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-
-							else if (fileName.Contains("\\Tile\\"))
-								CreateTile(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
+						if (fileName.Contains("\\Item\\")) {
+							ThreadPool.QueueUserWorkItem(CreateItem, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
 						}
+
+						else if (fileName.Contains("\\NPC\\")) {
+							ThreadPool.QueueUserWorkItem(CreateNPC, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
+						}
+
+						else if (fileName.Contains("\\Tile\\")) {
+							ThreadPool.QueueUserWorkItem(CreateTile, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
+						}
+
+						loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 					}
-					// this is for the obj (im scared of it)
-					//stream.Position = 0L;
-					//BinaryReader reader;
-					//using (reader = new BinaryReader(stream))
-					//{
-					//	string modName = Path.GetFileName(files[i]).Split('.')[0];
-					//	stream.Position = 0L;
-					//	var version = new Version(reader.ReadString());
 
-					//	// Don't know what these things are
-					//	int modVersion;
-					//	string modDLVersion, modURL;
-					//	if (version >= new Version("0.20.5"))
-					//		modVersion = reader.ReadInt32();
+					finished.Signal();
+					finished.Wait();
 
-					//	if (version >= new Version("0.22.8") && reader.ReadBoolean())
-					//	{
-					//		modDLVersion = reader.ReadString();
-					//		modURL = reader.ReadString();
-					//	}
+					foreach (var item in itemsToLoad) {
+						mod.AddItem(item.Key, item.Value);
+					}
 
-					//	reader.Close();
-					//	stream.Close();
-					//}
+					foreach (var tile in tilesToLoad) {
+						mod.AddTile(tile.Key, tile.Value.tile, tile.Value.texture);
+					}
+
+					foreach (var npc in npcsToLoad) {
+						mod.AddNPC(npc.Key, npc.Value);
+					}
 				}
+				// this is for the obj (im scared of it)
+				//stream.Position = 0L;
+				//BinaryReader reader;
+				//using (reader = new BinaryReader(stream))
+				//{
+				//	string modName = Path.GetFileName(files[i]).Split('.')[0];
+				//	stream.Position = 0L;
+				//	var version = new Version(reader.ReadString());
+
+				//	// Don't know what these things are
+				//	int modVersion;
+				//	string modDLVersion, modURL;
+				//	if (version >= new Version("0.20.5"))
+				//		modVersion = reader.ReadInt32();
+
+				//	if (version >= new Version("0.22.8") && reader.ReadBoolean())
+				//	{
+				//		modDLVersion = reader.ReadString();
+				//		modURL = reader.ReadString();
+				//	}
+
+				//	reader.Close();
+				//	stream.Close();
+				//}
+
 			}
 
 			//Reset progress bar
@@ -249,7 +279,18 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateItem(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateItem((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateItem(string fileName, string modName, string extractPath) {
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0;
@@ -267,30 +308,25 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						switch (section.Name)
-						{
-							case "Stats":
-							{
+						switch (section.Name) {
+							case "Stats": {
 								var splitElement = element.Content.Split('=');
 
 								var statField = typeof(ItemInfo).GetField(splitElement[0]);
 
-								switch (splitElement[0])
-								{
+								switch (splitElement[0]) {
 									// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
 									case "toolTip":
 										tooltip = splitElement[1];
 										continue;
-									case "useSound":
-									{
+									case "useSound": {
 										var soundStyleId = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
 										statField = typeof(ItemInfo).GetField("UseSound");
 										statField.SetValue(info, soundStyle);
 										continue;
 									}
-									case "createTileName":
-									{
+									case "createTileName": {
 										statField = typeof(ItemInfo).GetField("createTile");
 										var succeed = int.TryParse(splitElement[1], out var createTileID);
 										if (succeed) {
@@ -310,6 +346,7 @@ namespace tConfigWrapper {
 												logItemAndModName = true;
 											}
 										}
+
 										continue;
 									}
 									case "type":
@@ -321,6 +358,7 @@ namespace tConfigWrapper {
 											tConfigWrapper.ReportErrors = true;
 											continue;
 										}
+
 										break;
 									}
 								}
@@ -333,7 +371,7 @@ namespace tConfigWrapper {
 							}
 							case "Recipe": {
 								if (!recipeDict.ContainsKey(internalName))
-									recipeDict.Add(internalName, section);
+									recipeDict.TryAdd(internalName, section);
 								break;
 							}
 						}
@@ -346,7 +384,7 @@ namespace tConfigWrapper {
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D itemTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureStream = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
 						textureStream.Position = 0;
@@ -358,7 +396,7 @@ namespace tConfigWrapper {
 				int id;
 				if ((id = ItemID.FromLegacyName(itemName, 4)) != 0) {
 					if (!globalItemInfos.ContainsKey(id))
-						globalItemInfos.Add(id, (ItemInfo)info);
+						globalItemInfos.TryAdd(id, (ItemInfo)info);
 					else
 						globalItemInfos[id] = (ItemInfo)info;
 
@@ -367,15 +405,26 @@ namespace tConfigWrapper {
 				}
 
 				if (itemTexture != null)
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
 				else
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
 
 				reader.Dispose();
 			}
 		}
 
-		private static void CreateNPC(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateNPC(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateNPC((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateNPC(string fileName, string modName, string extractPath) {
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0L;
@@ -391,27 +440,22 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						switch (section.Name)
-						{
-							case "Stats":
-							{
+						switch (section.Name) {
+							case "Stats": {
 								var splitElement = element.Content.Split('=');
 
 								string split1Correct = ConvertField14(splitElement[0]);
 								var statField = typeof(NpcInfo).GetField(split1Correct);
 
-								switch (splitElement[0])
-								{
-									case "soundHit":
-									{
+								switch (splitElement[0]) {
+									case "soundHit": {
 										var soundStyleID = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
 										statField = typeof(NpcInfo).GetField("HitSound");
 										statField.SetValue(info, soundStyle);
 										continue;
 									}
-									case "soundKilled":
-									{
+									case "soundKilled": {
 										var soundStyleID = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
 										statField = typeof(NpcInfo).GetField("DeathSound");
@@ -453,7 +497,7 @@ namespace tConfigWrapper {
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D npcTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureStream = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
 						textureStream.Position = 0;
@@ -463,9 +507,9 @@ namespace tConfigWrapper {
 				}
 
 				if (npcTexture != null)
-					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
+					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
 				else
-					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName));
+					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName));
 
 				reader.Dispose();
 			}
@@ -520,10 +564,22 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateTile(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateTile((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateTile(string fileName, string modName, string extractPath) {
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
 			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
 			Dictionary<string, string> tileStringFields = new Dictionary<string, string>();
+
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniSteam = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniSteam);
 				iniSteam.Position = 0L;
@@ -618,7 +674,7 @@ namespace tConfigWrapper {
 
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D tileTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureSteam = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureSteam);
 						textureSteam.Position = 0L;
@@ -629,11 +685,11 @@ namespace tConfigWrapper {
 
 				if (tileTexture != null) {
 					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
-					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
+					tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
 					if (oreTile)
-						tileMapData.Add(baseTile, new DisplayName(true, displayName));
+						tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
 					else
-						tileMapData.Add(baseTile, new DisplayName(false, displayName));
+						tileMapData.TryAdd(baseTile, new DisplayName(false, displayName));
 				}
 
 				if (logTileAndName)
