@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -22,15 +23,17 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
-		internal static Dictionary<int, ItemInfo> globalItemInfos = new Dictionary<int, ItemInfo>();
+		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 
-		private static readonly Dictionary<string, IniFileSection> recipeDict = new Dictionary<string, IniFileSection>();
+		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
 
-		public static Dictionary<ModTile, DisplayName> tileMapData = new Dictionary<ModTile, DisplayName>();
+		public static ConcurrentDictionary<ModTile, DisplayName> tileMapData = new ConcurrentDictionary<ModTile, DisplayName>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
+			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
+
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
@@ -347,7 +350,7 @@ namespace tConfigWrapper {
 							}
 							case "Recipe": {
 								if (!recipeDict.ContainsKey(internalName))
-									recipeDict.Add(internalName, section);
+									recipeDict.TryAdd(internalName, section);
 								break;
 							}
 						}
@@ -372,7 +375,7 @@ namespace tConfigWrapper {
 				int id;
 				if ((id = ItemID.FromLegacyName(itemName, 4)) != 0) {
 					if (!globalItemInfos.ContainsKey(id))
-						globalItemInfos.Add(id, (ItemInfo)info);
+						globalItemInfos.TryAdd(id, (ItemInfo)info);
 					else
 						globalItemInfos[id] = (ItemInfo)info;
 
@@ -663,9 +666,9 @@ namespace tConfigWrapper {
 					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
 					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
 					if (oreTile)
-						tileMapData.Add(baseTile, new DisplayName(true, displayName));
+						tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
 					else
-						tileMapData.Add(baseTile, new DisplayName(false, displayName));
+						tileMapData.TryAdd(baseTile, new DisplayName(false, displayName));
 				}
 
 				if (logTileAndName)
