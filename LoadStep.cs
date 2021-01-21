@@ -26,6 +26,9 @@ namespace tConfigWrapper {
 		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 
 		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
+		private static readonly ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
+		private static readonly ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
+		private static readonly ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
 
 		public static ConcurrentDictionary<ModTile, DisplayName> tileMapData = new ConcurrentDictionary<ModTile, DisplayName>();
 
@@ -64,7 +67,13 @@ namespace tConfigWrapper {
 					IniFileReader configReader = new IniFileReader(configStream);
 					IniFile configFile = IniFile.FromStream(configReader);
 					configStream.Dispose();
+
 					mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+					
+					itemsToLoad.Clear();
+					tilesToLoad.Clear();
+					npcsToLoad.Clear();
+
 					int numIterations = 0;
 					foreach (string fileName in extractor.ArchiveFileNames) {
 						loadSubProgressText?.Invoke(fileName);
@@ -92,6 +101,18 @@ namespace tConfigWrapper {
 
 					finished.Signal();
 					finished.Wait();
+
+					foreach (var item in itemsToLoad) {
+						mod.AddItem(item.Key, item.Value);
+					}
+
+					foreach (var tile in tilesToLoad) {
+						mod.AddTile(tile.Key, tile.Value.tile, tile.Value.texture);
+					}
+
+					foreach (var npc in npcsToLoad) {
+						mod.AddNPC(npc.Key, npc.Value);
+					}
 				}
 				// this is for the obj (im scared of it)
 				//stream.Position = 0L;
@@ -384,9 +405,9 @@ namespace tConfigWrapper {
 				}
 
 				if (itemTexture != null)
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
 				else
-					mod.AddItem(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
 
 				reader.Dispose();
 			}
@@ -486,9 +507,9 @@ namespace tConfigWrapper {
 				}
 
 				if (npcTexture != null)
-					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
+					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
 				else
-					mod.AddNPC(internalName, new BaseNPC((NpcInfo)info, npcName));
+					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName));
 
 				reader.Dispose();
 			}
@@ -664,7 +685,7 @@ namespace tConfigWrapper {
 
 				if (tileTexture != null) {
 					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
-					mod.AddTile(internalName, baseTile, "tConfigWrapper/DataTemplates/MissingTexture");
+					tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
 					if (oreTile)
 						tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
 					else
