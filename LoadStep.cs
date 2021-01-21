@@ -8,6 +8,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using tConfigWrapper.DataTemplates;
 using Terraria;
 using Terraria.Audio;
@@ -52,63 +53,68 @@ namespace tConfigWrapper {
 			for (int i = 0; i < files.Length; i++) {
 				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
-				using (Stream stream = new MemoryStream()) {
-					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
-						// Note for pollen, when you have a stream, at the end you have to dispose it
-						// There are two ways to do this, calling .Dispose(), or using "using (Stream whatever ...) { ... }"
-						// The "using" way is better because it will always Dispose it, even if there's an exception
+				using (var finished = new CountdownEvent(1))
+				using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
+					MemoryStream configStream = new MemoryStream();
+					extractor.ExtractFile("Config.ini", configStream);
+					configStream.Position = 0L;
+					IniFileReader configReader = new IniFileReader(configStream);
+					IniFile configFile = IniFile.FromStream(configReader);
+					configStream.Dispose();
+					mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+					int numIterations = 0;
+					foreach (string fileName in extractor.ArchiveFileNames) {
+						loadSubProgressText?.Invoke(fileName);
+						numIterations++;
+						if (Path.GetExtension(fileName) != ".ini")
+							continue; // If the extension is not .ini, ignore the file
 
-						// Disposing via .Dispose()
-						MemoryStream configStream = new MemoryStream();
-						extractor.ExtractFile("Config.ini", configStream);
-						configStream.Position = 0L;
-						IniFileReader configReader = new IniFileReader(configStream);
-						IniFile configFile = IniFile.FromStream(configReader);
-						configStream.Dispose();
-						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
-						int numIterations = 0;
-						foreach (string fileName in extractor.ArchiveFileNames) {
-							loadSubProgressText?.Invoke(fileName);
-							numIterations++;
-							if (Path.GetExtension(fileName) != ".ini")
-								continue; // If the extension is not .ini, ignore the file
-
-							if (fileName.Contains("\\Item\\"))
-								CreateItem(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-
-							else if (fileName.Contains("\\NPC\\"))
-								CreateNPC(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-
-							else if (fileName.Contains("\\Tile\\"))
-								CreateTile(fileName, Path.GetFileNameWithoutExtension(files[i]), extractor);
-							loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
+						if (fileName.Contains("\\Item\\")) {
+							ThreadPool.QueueUserWorkItem(CreateItem, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
 						}
+
+						else if (fileName.Contains("\\NPC\\")) {
+							ThreadPool.QueueUserWorkItem(CreateNPC, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
+						}
+
+						else if (fileName.Contains("\\Tile\\")) {
+							ThreadPool.QueueUserWorkItem(CreateTile, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							finished.AddCount();
+						}
+
+						loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
 					}
-					// this is for the obj (im scared of it)
-					//stream.Position = 0L;
-					//BinaryReader reader;
-					//using (reader = new BinaryReader(stream))
-					//{
-					//	string modName = Path.GetFileName(files[i]).Split('.')[0];
-					//	stream.Position = 0L;
-					//	var version = new Version(reader.ReadString());
 
-					//	// Don't know what these things are
-					//	int modVersion;
-					//	string modDLVersion, modURL;
-					//	if (version >= new Version("0.20.5"))
-					//		modVersion = reader.ReadInt32();
-
-					//	if (version >= new Version("0.22.8") && reader.ReadBoolean())
-					//	{
-					//		modDLVersion = reader.ReadString();
-					//		modURL = reader.ReadString();
-					//	}
-
-					//	reader.Close();
-					//	stream.Close();
-					//}
+					finished.Signal();
+					finished.Wait();
 				}
+				// this is for the obj (im scared of it)
+				//stream.Position = 0L;
+				//BinaryReader reader;
+				//using (reader = new BinaryReader(stream))
+				//{
+				//	string modName = Path.GetFileName(files[i]).Split('.')[0];
+				//	stream.Position = 0L;
+				//	var version = new Version(reader.ReadString());
+
+				//	// Don't know what these things are
+				//	int modVersion;
+				//	string modDLVersion, modURL;
+				//	if (version >= new Version("0.20.5"))
+				//		modVersion = reader.ReadInt32();
+
+				//	if (version >= new Version("0.22.8") && reader.ReadBoolean())
+				//	{
+				//		modDLVersion = reader.ReadString();
+				//		modURL = reader.ReadString();
+				//	}
+
+				//	reader.Close();
+				//	stream.Close();
+				//}
+
 			}
 
 			//Reset progress bar
@@ -249,7 +255,18 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateItem(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateItem(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateItem((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateItem(string fileName, string modName, string extractPath) {
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0;
@@ -267,30 +284,25 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						switch (section.Name)
-						{
-							case "Stats":
-							{
+						switch (section.Name) {
+							case "Stats": {
 								var splitElement = element.Content.Split('=');
 
 								var statField = typeof(ItemInfo).GetField(splitElement[0]);
 
-								switch (splitElement[0])
-								{
+								switch (splitElement[0]) {
 									// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
 									case "toolTip":
 										tooltip = splitElement[1];
 										continue;
-									case "useSound":
-									{
+									case "useSound": {
 										var soundStyleId = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
 										statField = typeof(ItemInfo).GetField("UseSound");
 										statField.SetValue(info, soundStyle);
 										continue;
 									}
-									case "createTileName":
-									{
+									case "createTileName": {
 										statField = typeof(ItemInfo).GetField("createTile");
 										var succeed = int.TryParse(splitElement[1], out var createTileID);
 										if (succeed) {
@@ -310,6 +322,7 @@ namespace tConfigWrapper {
 												logItemAndModName = true;
 											}
 										}
+
 										continue;
 									}
 									case "type":
@@ -321,6 +334,7 @@ namespace tConfigWrapper {
 											tConfigWrapper.ReportErrors = true;
 											continue;
 										}
+
 										break;
 									}
 								}
@@ -375,7 +389,18 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateNPC(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateNPC(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateNPC((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateNPC(string fileName, string modName, string extractPath) {
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniStream = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniStream);
 				iniStream.Position = 0L;
@@ -391,27 +416,22 @@ namespace tConfigWrapper {
 
 				foreach (IniFileSection section in iniFile.sections) {
 					foreach (IniFileElement element in section.elements) {
-						switch (section.Name)
-						{
-							case "Stats":
-							{
+						switch (section.Name) {
+							case "Stats": {
 								var splitElement = element.Content.Split('=');
 
 								string split1Correct = ConvertField14(splitElement[0]);
 								var statField = typeof(NpcInfo).GetField(split1Correct);
 
-								switch (splitElement[0])
-								{
-									case "soundHit":
-									{
+								switch (splitElement[0]) {
+									case "soundHit": {
 										var soundStyleID = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
 										statField = typeof(NpcInfo).GetField("HitSound");
 										statField.SetValue(info, soundStyle);
 										continue;
 									}
-									case "soundKilled":
-									{
+									case "soundKilled": {
 										var soundStyleID = int.Parse(splitElement[1]);
 										var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
 										statField = typeof(NpcInfo).GetField("DeathSound");
@@ -520,10 +540,22 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateTile(string fileName, string modName, SevenZipExtractor extractor) {
+		private static void CreateTile(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			CreateTile((string)parameters[0], (string)parameters[1], (string)parameters[2]);
+
+			countdown.Signal();
+		}
+
+		private static void CreateTile(string fileName, string modName, string extractPath) {
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
 			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
 			Dictionary<string, string> tileStringFields = new Dictionary<string, string>();
+
+			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
 			using (MemoryStream iniSteam = new MemoryStream()) {
 				extractor.ExtractFile(fileName, iniSteam);
 				iniSteam.Position = 0L;
