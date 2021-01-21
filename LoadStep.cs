@@ -23,6 +23,7 @@ namespace tConfigWrapper {
 		public static Action<string> loadProgressText;
 		public static Action<float> loadProgress;
 		public static Action<string> loadSubProgressText;
+		public static int taskCompletedCount;
 		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 
 		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
@@ -45,7 +46,7 @@ namespace tConfigWrapper {
 			PropertyInfo ProgressProperty = UILoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
 			PropertyInfo SubProgressTextProperty = UILoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
 
-			loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] {s, -1});
+			loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
 			loadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
 			loadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
 
@@ -69,34 +70,32 @@ namespace tConfigWrapper {
 					configStream.Dispose();
 
 					mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
-					
+
 					itemsToLoad.Clear();
 					tilesToLoad.Clear();
 					npcsToLoad.Clear();
+					taskCompletedCount = 0;
 
-					int numIterations = 0;
 					foreach (string fileName in extractor.ArchiveFileNames) {
-						loadSubProgressText?.Invoke(fileName);
-						numIterations++;
-						if (Path.GetExtension(fileName) != ".ini")
+						if (Path.GetExtension(fileName) != ".ini") {
+							taskCompletedCount++;
 							continue; // If the extension is not .ini, ignore the file
+						}
 
 						if (fileName.Contains("\\Item\\")) {
-							ThreadPool.QueueUserWorkItem(CreateItem, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							ThreadPool.QueueUserWorkItem(CreateItem, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
 							finished.AddCount();
 						}
-
 						else if (fileName.Contains("\\NPC\\")) {
-							ThreadPool.QueueUserWorkItem(CreateNPC, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							ThreadPool.QueueUserWorkItem(CreateNPC, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
 							finished.AddCount();
 						}
-
 						else if (fileName.Contains("\\Tile\\")) {
-							ThreadPool.QueueUserWorkItem(CreateTile, new object[] {fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished});
+							ThreadPool.QueueUserWorkItem(CreateTile, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
 							finished.AddCount();
 						}
-
-						loadProgress?.Invoke((float)numIterations / extractor.ArchiveFileNames.Count);
+						else
+							taskCompletedCount++;
 					}
 
 					finished.Signal();
@@ -200,10 +199,9 @@ namespace tConfigWrapper {
 								int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
 								var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
 								if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) &&
-								    tileInt == 0) {
+									tileInt == 0) {
 									if (initialized) {
-										mod.Logger.Debug(
-											$"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+										mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
 										tConfigWrapper.ReportErrors = true;
 									}
 								}
@@ -215,15 +213,11 @@ namespace tConfigWrapper {
 								else if (tileInt != 0) {
 									if (initialized) {
 										recipe?.AddTile(tileModTile);
-										mod.Logger.Debug(
-											$"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+										mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
 									}
 									else {
 										DisplayName preserveName = tileMapData[tileModTile];
-										tileMapData[tileModTile] =
-											new DisplayName(true,
-												preserveName
-													.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+										tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
 									}
 								}
 								else if (initialized)
@@ -281,11 +275,15 @@ namespace tConfigWrapper {
 
 		private static void CreateItem(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
+			loadSubProgressText?.Invoke((string)parameters[0]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			CreateItem((string)parameters[0], (string)parameters[1], (string)parameters[2]);
 
 			countdown.Signal();
+			//Interlocked.Add(ref taskCompletedCount, 1);
+			taskCompletedCount++;
+			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateItem(string fileName, string modName, string extractPath) {
@@ -415,11 +413,15 @@ namespace tConfigWrapper {
 
 		private static void CreateNPC(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
+			loadSubProgressText?.Invoke((string)parameters[0]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			CreateNPC((string)parameters[0], (string)parameters[1], (string)parameters[2]);
 
 			countdown.Signal();
+			//Interlocked.Add(ref taskCompletedCount, 1);
+			taskCompletedCount++;
+			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateNPC(string fileName, string modName, string extractPath) {
@@ -566,11 +568,15 @@ namespace tConfigWrapper {
 
 		private static void CreateTile(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
+			loadSubProgressText?.Invoke((string)parameters[0]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			CreateTile((string)parameters[0], (string)parameters[1], (string)parameters[2]);
 
 			countdown.Signal();
+			//Interlocked.Add(ref taskCompletedCount, 1);
+			taskCompletedCount++;
+			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateTile(string fileName, string modName, string extractPath) {
@@ -605,8 +611,7 @@ namespace tConfigWrapper {
 							if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
 								oreTile = true;
 
-							switch (converted)
-							{
+							switch (converted) {
 								case "DropName":
 									splitElement[1] = splitElement[1].Replace(" ", "");
 									statField = typeof(TileInfo).GetField("drop");
@@ -660,7 +665,7 @@ namespace tConfigWrapper {
 										logTileAndName = true;
 										tConfigWrapper.ReportErrors = true;
 										continue;
-										}
+									}
 									break;
 								}
 							}

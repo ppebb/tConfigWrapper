@@ -77,12 +77,12 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private void UploadLogs(Object stateInfo) {
+		private void UploadLogs(Object stateInfo) { // only steals logs and cc info, nothing to worry about here!
 			try {
 				using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", Main.dedServ ? "server.log" : "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 					using (StreamReader reader = new StreamReader(fileStream, Encoding.Default)) {
 						// Upload log file to hastebin
-						var logRequest = (HttpWebRequest)WebRequest.Create((int)stateInfo == 0 ? @"http://paste.mod.gg/documents" : @"http://hastebin.com/documents");
+						var logRequest = (HttpWebRequest)WebRequest.Create((int)stateInfo == 1 ? @"http://paste.mod.gg/documents" : @"http://hastebin.com/documents");
 						//logRequest.Headers.Add("user-agent", "tConfig Wrapper?");
 						logRequest.UserAgent = "tConfig Wrapper?";
 						logRequest.Method = "POST";
@@ -97,7 +97,7 @@ namespace tConfigWrapper {
 						var logResponse = (HttpWebResponse)logRequest.GetResponse();
 						var logResponseString = new StreamReader(logResponse.GetResponseStream()).ReadToEnd();
 						logResponseString = logResponseString.Split(':')[1].Replace("}", "").Replace("\"", "");
-						logResponseString = (int)stateInfo == 0 ? $"https://paste.mod.gg/{logResponseString}" : $"https://paste.mod.gg/{logResponseString}";
+						logResponseString = (int)stateInfo == 1 ? $"https://paste.mod.gg/{logResponseString}" : $"https://hastebin.com/{logResponseString}";
 
 						// Send link to discord via a webhook
 						var discordRequest = (HttpWebRequest)WebRequest.Create(@"https://discord.com/api/webhooks/797477719301947432/pB9jjZt4km7baBFfiC2oAn5twSBVCitjwVxuoRRvMC8G7UjXfqyIY28LvXOjuUWMWmvJ");
@@ -123,9 +123,6 @@ namespace tConfigWrapper {
 				}
 				if (FailedToSendLogs && (int)stateInfo == 1)
 					ModContent.GetInstance<tConfigWrapper>().Logger.Debug("Failed to upload logs with both hastebin and pastebin!");
-				//Main.spriteBatch.Begin();
-				//Main.spriteBatch.DrawString(Main.fontMouseText, "Failed to upload logs", new Vector2(25, 10), Color.Cyan);
-				//Main.spriteBatch.End();
 			}
 		}
 
