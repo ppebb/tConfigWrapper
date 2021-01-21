@@ -384,7 +384,7 @@ namespace tConfigWrapper {
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D itemTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureStream = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
 						textureStream.Position = 0;
@@ -497,7 +497,7 @@ namespace tConfigWrapper {
 				// Check if a texture for the .ini file exists
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D npcTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureStream = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
 						textureStream.Position = 0;
@@ -674,7 +674,7 @@ namespace tConfigWrapper {
 
 				string texturePath = Path.ChangeExtension(fileName, "png");
 				Texture2D tileTexture = null;
-				if (extractor.ArchiveFileNames.Contains(texturePath)) {
+				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
 					using (MemoryStream textureSteam = new MemoryStream()) {
 						extractor.ExtractFile(texturePath, textureSteam);
 						textureSteam.Position = 0L;
