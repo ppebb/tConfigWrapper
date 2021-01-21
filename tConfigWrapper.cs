@@ -111,7 +111,7 @@ namespace tConfigWrapper {
 						// Send link to discord via a webhook
 						var discordRequest = (HttpWebRequest)WebRequest.Create(@"https://discord.com/api/webhooks/797477719301947432/pB9jjZt4km7baBFfiC2oAn5twSBVCitjwVxuoRRvMC8G7UjXfqyIY28LvXOjuUWMWmvJ");
 						//discordRequest.Headers.Add("user-agent", "tConfig Wrapper?");
-						logRequest.UserAgent = "tConfig Wrapper?";
+						discordRequest.UserAgent = "tConfig Wrapper?";
 						discordRequest.Method = "POST";
 						discordRequest.ContentType = "application/json";
 						string serverOrClient = Main.dedServ ? "server" : "client";

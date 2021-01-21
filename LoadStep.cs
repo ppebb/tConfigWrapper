@@ -60,57 +60,72 @@ namespace tConfigWrapper {
 			for (int i = 0; i < files.Length; i++) {
 				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
-				using (var finished = new CountdownEvent(1))
-				using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
-					MemoryStream configStream = new MemoryStream();
-					extractor.ExtractFile("Config.ini", configStream);
-					configStream.Position = 0L;
-					IniFileReader configReader = new IniFileReader(configStream);
-					IniFile configFile = IniFile.FromStream(configReader);
-					configStream.Dispose();
+				using (var finished = new CountdownEvent(1)) {
+					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
+						MemoryStream configStream = new MemoryStream();
+						extractor.ExtractFile("Config.ini", configStream);
+						configStream.Position = 0L;
+						IniFileReader configReader = new IniFileReader(configStream);
+						IniFile configFile = IniFile.FromStream(configReader);
+						configStream.Dispose();
 
-					mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
 
-					itemsToLoad.Clear();
-					tilesToLoad.Clear();
-					npcsToLoad.Clear();
-					taskCompletedCount = 0;
+						itemsToLoad.Clear();
+						tilesToLoad.Clear();
+						npcsToLoad.Clear();
+						taskCompletedCount = 0;
 
-					foreach (string fileName in extractor.ArchiveFileNames) {
-						if (Path.GetExtension(fileName) != ".ini") {
-							taskCompletedCount++;
-							continue; // If the extension is not .ini, ignore the file
+						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\"));
+						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\"));
+						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\"));
+
+						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count();
+
+						Thread itemThread = new Thread(CreateItem);
+						itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+
+						//Thread npcThread = new Thread(CreateNPC);
+						//itemThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+
+						//Thread tileThread = new Thread(CreateTile);
+						//itemThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						/*foreach (string fileName in extractor.ArchiveFileNames) {
+							if (Path.GetExtension(fileName) != ".ini") {
+								taskCompletedCount++;
+								continue; // If the extension is not .ini, ignore the file
+							}
+
+							if (fileName.Contains("\\Item\\")) {
+								ThreadPool.QueueUserWorkItem(CreateItem, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
+								finished.AddCount();
+							}
+							else if (fileName.Contains("\\NPC\\")) {
+								ThreadPool.QueueUserWorkItem(CreateNPC, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
+								finished.AddCount();
+							}
+							else if (fileName.Contains("\\Tile\\")) {
+								ThreadPool.QueueUserWorkItem(CreateTile, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
+								finished.AddCount();
+							}
+							else
+								taskCompletedCount++;
+						}*/
+
+						finished.Signal();
+						finished.Wait();
+
+						foreach (var item in itemsToLoad) {
+							mod.AddItem(item.Key, item.Value);
 						}
 
-						if (fileName.Contains("\\Item\\")) {
-							ThreadPool.QueueUserWorkItem(CreateItem, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-							finished.AddCount();
+						foreach (var tile in tilesToLoad) {
+							mod.AddTile(tile.Key, tile.Value.tile, tile.Value.texture);
 						}
-						else if (fileName.Contains("\\NPC\\")) {
-							ThreadPool.QueueUserWorkItem(CreateNPC, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-							finished.AddCount();
+
+						foreach (var npc in npcsToLoad) {
+							mod.AddNPC(npc.Key, npc.Value);
 						}
-						else if (fileName.Contains("\\Tile\\")) {
-							ThreadPool.QueueUserWorkItem(CreateTile, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-							finished.AddCount();
-						}
-						else
-							taskCompletedCount++;
-					}
-
-					finished.Signal();
-					finished.Wait();
-
-					foreach (var item in itemsToLoad) {
-						mod.AddItem(item.Key, item.Value);
-					}
-
-					foreach (var tile in tilesToLoad) {
-						mod.AddTile(tile.Key, tile.Value.tile, tile.Value.texture);
-					}
-
-					foreach (var npc in npcsToLoad) {
-						mod.AddNPC(npc.Key, npc.Value);
 					}
 				}
 				// this is for the obj (im scared of it)
@@ -139,7 +154,6 @@ namespace tConfigWrapper {
 				//}
 
 			}
-
 			//Reset progress bar
 			loadSubProgressText?.Invoke("");
 			loadProgressText?.Invoke("Loading mod");
@@ -273,17 +287,17 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateItem(object stateInfo) {
+		private static void CreateItem(object stateInfo) { //itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount
 			object[] parameters = (object[])stateInfo;
-			loadSubProgressText?.Invoke((string)parameters[0]);
+			loadSubProgressText?.Invoke((string)parameters[1]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
-			CreateItem((string)parameters[0], (string)parameters[1], (string)parameters[2]);
-
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				CreateItem(fileName, (string)parameters[1], (string)parameters[2]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
 			countdown.Signal();
-			//Interlocked.Add(ref taskCompletedCount, 1);
-			taskCompletedCount++;
-			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateItem(string fileName, string modName, string extractPath) {
