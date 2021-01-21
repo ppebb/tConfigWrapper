@@ -76,41 +76,23 @@ namespace tConfigWrapper {
 						npcsToLoad.Clear();
 						taskCompletedCount = 0;
 
-						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\"));
-						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\"));
-						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\"));
+						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\") && Path.GetExtension(name) == ".ini");
+						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\") && Path.GetExtension(name) == ".ini");
+						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\") && Path.GetExtension(name) == ".ini");
 
 						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count();
 
 						Thread itemThread = new Thread(CreateItem);
 						itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						finished.AddCount();
 
-						//Thread npcThread = new Thread(CreateNPC);
-						//itemThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						Thread npcThread = new Thread(CreateNPC);
+						npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						finished.AddCount();
 
-						//Thread tileThread = new Thread(CreateTile);
-						//itemThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
-						/*foreach (string fileName in extractor.ArchiveFileNames) {
-							if (Path.GetExtension(fileName) != ".ini") {
-								taskCompletedCount++;
-								continue; // If the extension is not .ini, ignore the file
-							}
-
-							if (fileName.Contains("\\Item\\")) {
-								ThreadPool.QueueUserWorkItem(CreateItem, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-								finished.AddCount();
-							}
-							else if (fileName.Contains("\\NPC\\")) {
-								ThreadPool.QueueUserWorkItem(CreateNPC, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-								finished.AddCount();
-							}
-							else if (fileName.Contains("\\Tile\\")) {
-								ThreadPool.QueueUserWorkItem(CreateTile, new object[] { fileName, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor.ArchiveFileNames.Count });
-								finished.AddCount();
-							}
-							else
-								taskCompletedCount++;
-						}*/
+						Thread tileThread = new Thread(CreateTile);
+						tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						finished.AddCount();
 
 						finished.Signal();
 						finished.Wait();
@@ -287,12 +269,12 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateItem(object stateInfo) { //itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount
+		private static void CreateItem(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
-			loadSubProgressText?.Invoke((string)parameters[1]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
 				CreateItem(fileName, (string)parameters[1], (string)parameters[2]);
 				taskCompletedCount++;
 				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
@@ -427,15 +409,15 @@ namespace tConfigWrapper {
 
 		private static void CreateNPC(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
-			loadSubProgressText?.Invoke((string)parameters[0]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
-			CreateNPC((string)parameters[0], (string)parameters[1], (string)parameters[2]);
-
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				CreateNPC(fileName, (string)parameters[1], (string)parameters[2]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
 			countdown.Signal();
-			//Interlocked.Add(ref taskCompletedCount, 1);
-			taskCompletedCount++;
-			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateNPC(string fileName, string modName, string extractPath) {
@@ -582,15 +564,15 @@ namespace tConfigWrapper {
 
 		private static void CreateTile(object stateInfo) {
 			object[] parameters = (object[])stateInfo;
-			loadSubProgressText?.Invoke((string)parameters[0]);
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
-			CreateTile((string)parameters[0], (string)parameters[1], (string)parameters[2]);
-
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				CreateTile(fileName, (string)parameters[1], (string)parameters[2]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
 			countdown.Signal();
-			//Interlocked.Add(ref taskCompletedCount, 1);
-			taskCompletedCount++;
-			loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[4]);
 		}
 
 		private static void CreateTile(string fileName, string modName, string extractPath) {
