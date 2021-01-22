@@ -19,25 +19,25 @@ using Terraria.ModLoader;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
-		public static string[] files;
-		public static Action<string> loadProgressText;
-		public static Action<float> loadProgress;
-		public static Action<string> loadSubProgressText;
-		public static int taskCompletedCount;
-		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
+		public static string[] files; // Array of all mods, should be changed to only enabled mods but I am not doing any of that yet :)
+		public static Action<string> loadProgressText; // Heading text during loading
+		public static Action<float> loadProgress; // Progress bar during loading: 0-1 scale
+		public static Action<string> loadSubProgressText; // Subtext during loading
+		public static int taskCompletedCount; // Int used for tracking load progress during content loading
+		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>(); // Dictionaries are selfexplanatory, concurrent so that multiple threads can access them without dying
 
 		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
 		private static readonly ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
 		private static readonly ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
 		private static readonly ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
-
 		public static ConcurrentDictionary<ModTile, DisplayName> tileMapData = new ConcurrentDictionary<ModTile, DisplayName>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
-		public static void Setup() {
+		public static void Setup() { // Method to load everything
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
 
+			// Cringe reflection
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
@@ -53,53 +53,50 @@ namespace tConfigWrapper {
 			loadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
 			loadProgress?.Invoke(0f);
 
-			files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj");
+			files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj"); // Populates array with all mods
 			foreach (var modName in files)
-				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!");
+				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
 
-			for (int i = 0; i < files.Length; i++) {
-				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}");
-				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
+			for (int i = 0; i < files.Length; i++) { // Iterates through every mod
+				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}"); // Sets heading text to display the mod being loaded
+				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}"); // Logs the mod being loaded
 				using (var finished = new CountdownEvent(1)) {
 					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
-						if (extractor.ArchiveFileNames[0].Contains("Pickaxe+ v1.3a"))
-							//continue; // dont load bad mod, bad mod bad, really bad
-							loadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault if it takes 5000 millenniums");
+						bool CursedMod = extractor.ArchiveFileNames[0].Contains("Pickaxe+ v1.3a"); // Cursed mod bad
 
-						MemoryStream configStream = new MemoryStream();
-						extractor.ExtractFile("Config.ini", configStream);
-						configStream.Position = 0L;
-						IniFileReader configReader = new IniFileReader(configStream);
-						IniFile configFile = IniFile.FromStream(configReader);
-						configStream.Dispose();
+						if (CursedMod)
+							loadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault it takes so long to load");
 
 						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
 
 						ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
-						DecompressMod(files[i], extractor, streams);
+						DecompressMod(files[i], extractor, streams); // Decompresses mods since .obj files are literally just 7z files
 
+						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
 						itemsToLoad.Clear();
 						tilesToLoad.Clear();
 						npcsToLoad.Clear();
 						taskCompletedCount = 0;
 
+						// Slowass linq sorts content and then is assigned to individual threads
 						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\") && Path.GetExtension(name) == ".ini");
 
-						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count();
+						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count(); // Count all content in mod for accurate loading progress
 
-						if (contentCount != 0) {
+						if (contentCount != 0)
+						{
 							Thread itemThread = new Thread(CreateItem);
-							itemThread.Start(new object[] {itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread npcThread = new Thread(CreateNPC);
-							npcThread.Start(new object[] {npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread tileThread = new Thread(CreateTile);
-							tileThread.Start(new object[] {tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							finished.Signal();
@@ -110,6 +107,7 @@ namespace tConfigWrapper {
 							memoryStream.Value.Dispose();
 						}
 
+						//Load content from dictionaries
 						foreach (var item in itemsToLoad) {
 							mod.AddItem(item.Key, item.Value);
 						}
@@ -181,8 +179,8 @@ namespace tConfigWrapper {
 			}
 		}
 
-		public static int decompressTasksCompleted = 0;
-		public static int decompressTotalFiles = 0;
+		public static int decompressTasksCompleted = 0; // Total number of items decompressed
+		public static int decompressTotalFiles = 0; // Total number of items that need to be decompressed
 		private static void DecompressMod(object callback) {
 			// Process the parameters
 			object[] parameters = (object[])callback;
@@ -194,16 +192,12 @@ namespace tConfigWrapper {
 			// Create a FileStream with the following arguments to be able to have multiple threads access it
 			using (FileStream fileStream = new FileStream(objPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream)) {
-				bool firstIteration = true;
+				decompressTotalFiles += files.Count; // Counts the number of items that need to be loaded for accurate progress bar
 				foreach (var fileName in files) {
-					if (firstIteration) {
-						decompressTotalFiles += files.Count;
-						firstIteration = false;
-					}
-					loadProgress?.Invoke((float)decompressTasksCompleted / decompressTotalFiles);
+					loadProgress?.Invoke((float)decompressTasksCompleted / decompressTotalFiles); // Sets the progress bar
 					// If the extension is not valid, skip the file
 					string extension = Path.GetExtension(fileName);
-					if (!(extension == ".ini" || extension == ".cs" || extension == ".png" || extension == ".dll"))
+					if (!(extension == ".ini" || extension == ".cs" || extension == ".png" || extension == ".dll" || extension == ".obj"))
 						continue;
 
 					// Create a MemoryStream and extract the file
@@ -211,7 +205,7 @@ namespace tConfigWrapper {
 					extractor.ExtractFile(fileName, stream);
 					stream.Position = 0;
 					streams.TryAdd(fileName, stream);
-					decompressTasksCompleted++;
+					decompressTasksCompleted++; // Increments the number of tasks completed for accurate progress display
 				}
 			}
 
@@ -219,18 +213,18 @@ namespace tConfigWrapper {
 			countdown.Signal();
 		}
 
-		public static void SetupRecipes() {
-			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes");
+		public static void SetupRecipes() { // Sets up recipes, what were you expecting?
+			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
 			loadProgress.Invoke(0f);
 			int progressCount = 0;
-			bool initialized = (bool)Assembly.GetAssembly(typeof(Mod)).GetType("Terraria.ModLoader.MapLoader").GetField("initialized", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-			foreach (var iniFileSection in recipeDict) {
-				progressCount++;
+			bool initialized = (bool)Assembly.GetAssembly(typeof(Mod)).GetType("Terraria.ModLoader.MapLoader").GetField("initialized", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null); // Check if the map is already initialized
+			foreach (var iniFileSection in recipeDict) { // Load every recipe in the recipe dict
+				progressCount++; // Count the number of recipes, still broken somehow :(
 				string modName = iniFileSection.Key.Split(':')[0];
 				ModRecipe recipe = null;
-				if (initialized)
+				if (initialized) // Only make the recipe if the maps have already been initialized. The checks for initialized are because I run this method in GetTileMapEntires() to see what tiles are used in recipes and need to have a name in their map entry
 					recipe = new ModRecipe(mod);
-				foreach (var element in iniFileSection.Value.elements) {
+				foreach (var element in iniFileSection.Value.elements) { // ini recipe loading, code is readable enough.
 					string[] splitElement = element.Content.Split('=');
 					string key = splitElement[0];
 					string value = splitElement[1];
@@ -266,7 +260,7 @@ namespace tConfigWrapper {
 							}
 							break;
 						}
-						case "Tiles": {
+						case "Tiles": { // Does stuff to check for modtiles and vanilla tiles that have changed their name since 1.1.2
 							foreach (string recipeTile in value.Split(',')) {
 								string noSpaceTile = recipeTile.Replace(" ", "");
 								int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
@@ -274,12 +268,12 @@ namespace tConfigWrapper {
 								if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) &&
 									tileInt == 0) {
 									if (initialized) {
-										mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // we will have to manually convert anything that breaks lmao
+										mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // We will have to manually convert anything that breaks lmao
 										tConfigWrapper.ReportErrors = true;
 									}
 								}
 								else if (CheckStringConversion(noSpaceTile)) {
-									string converted = ConvertTileStringTo14(noSpaceTile);
+									string converted = ConvertTileStringTo13(noSpaceTile);
 									if (initialized)
 										recipe?.AddTile(TileID.Search.GetId(converted));
 								}
@@ -289,8 +283,8 @@ namespace tConfigWrapper {
 										mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
 									}
 									else {
-										DisplayName preserveName = tileMapData[tileModTile];
-										tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because yes
+										DisplayName preserveName = tileMapData[tileModTile]; // DisplayName is a struct so I can store 3 values in one dictionary
+										tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because readonly :letsfu:
 									}
 								}
 								else if (initialized)
@@ -303,12 +297,16 @@ namespace tConfigWrapper {
 				}
 
 				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
-					recipe.AddRecipe();
+					recipe?.AddRecipe();
 				loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
 		}
-
-		private static string ConvertTileStringTo14(string noSpaceTile) {
+		/// <summary>
+		/// Converts tile strings to the 1.3 equivalent
+		/// </summary>
+		/// <param name="noSpaceTile"></param>
+		/// <returns></returns>
+		private static string ConvertTileStringTo13(string noSpaceTile) {
 			switch (noSpaceTile) {
 				case "Anvil":
 					return "Anvils";
@@ -329,7 +327,11 @@ namespace tConfigWrapper {
 					return noSpaceTile;
 			}
 		}
-
+		/// <summary>
+		/// Checks if a tile can be converted to a 1.3 string
+		/// </summary>
+		/// <param name="noSpaceTile"></param>
+		/// <returns></returns>
 		private static bool CheckStringConversion(string noSpaceTile) {
 			switch (noSpaceTile) {
 				case "Anvil":
@@ -346,7 +348,7 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateItem(object stateInfo) {
+		private static void CreateItem(object stateInfo) { // This is literally just to simplify the threading and counting of content loading
 			object[] parameters = (object[])stateInfo;
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
@@ -359,14 +361,14 @@ namespace tConfigWrapper {
 			countdown.Signal();
 		}
 
-		private static void CreateItem(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+		private static void CreateItem(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) { // Loads content, I don't know how it works either
 			MemoryStream iniStream = streams[fileName];
 
 			IniFileReader reader = new IniFileReader(iniStream);
 			IniFile iniFile = IniFile.FromStream(reader);
 
 			object info = new ItemInfo();
-			string tooltip = null;
+			List<string> toolTipList = new List<string>();
 
 			// Get the mod name
 			string itemName = Path.GetFileNameWithoutExtension(fileName);
@@ -384,8 +386,16 @@ namespace tConfigWrapper {
 							switch (splitElement[0]) {
 								// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
 								case "toolTip":
-									tooltip = splitElement[1];
+								case "toolTip1":
+								case "toolTip2":
+								case "toolTip3":
+								case "toolTip4":
+								case "toolTip5":
+								case "toolTip6":
+								case "toolTip7": {
+									toolTipList.Add(splitElement[1]);
 									continue;
+								}
 								case "useSound": {
 									var soundStyleId = int.Parse(splitElement[1]);
 									var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
@@ -448,6 +458,12 @@ namespace tConfigWrapper {
 			if (logItemAndModName)
 				mod.Logger.Debug($"{modName}: {itemName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
 
+			string toolTip = null;
+
+			foreach (string toolTipLine in toolTipList) {
+				toolTip += "\n" + toolTipLine;
+			}
+
 			// Check if a texture for the .ini file exists
 			string texturePath = Path.ChangeExtension(fileName, "png");
 			Texture2D itemTexture = null;
@@ -467,15 +483,15 @@ namespace tConfigWrapper {
 			}
 
 			if (itemTexture != null)
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, toolTip, itemTexture));
 			else
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, toolTip));
 
 			reader.Dispose();
 			//}
 		}
 
-		private static void CreateNPC(object stateInfo) {
+		private static void CreateNPC(object stateInfo) { // This is literally just to simplify threading and progress counting
 			object[] parameters = (object[])stateInfo;
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
@@ -488,7 +504,7 @@ namespace tConfigWrapper {
 			countdown.Signal();
 		}
 
-		private static void CreateNPC(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+		private static void CreateNPC(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) { // I don't know how this works either
 			MemoryStream iniStream = streams[fileName];
 
 			IniFileReader reader = new IniFileReader(iniStream);
@@ -506,7 +522,7 @@ namespace tConfigWrapper {
 						case "Stats": {
 							var splitElement = element.Content.Split('=');
 
-							string split1Correct = ConvertField14(splitElement[0]);
+							string split1Correct = ConvertField13(splitElement[0]);
 							var statField = typeof(NpcInfo).GetField(split1Correct);
 
 							switch (splitElement[0]) {
@@ -571,7 +587,12 @@ namespace tConfigWrapper {
 			reader.Dispose();
 		}
 
-		private static string ConvertField14(string splitElement) {
+		/// <summary>
+		/// Converts fields to the 1.3 equivalent
+		/// </summary>
+		/// <param name="splitElement"></param>
+		/// <returns></returns>
+		private static string ConvertField13(string splitElement) {
 			switch (splitElement) {
 				case "knockBackResist":
 					return "knockBackResist";
@@ -620,7 +641,7 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private static void CreateTile(object stateInfo) {
+		private static void CreateTile(object stateInfo) { // This is literally for easier multithreading again
 			object[] parameters = (object[])stateInfo;
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
@@ -633,7 +654,7 @@ namespace tConfigWrapper {
 			countdown.Signal();
 		}
 
-		private static void CreateTile(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+		private static void CreateTile(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) { // I have no idea how this works either
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
 			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
 			Dictionary<string, string> tileStringFields = new Dictionary<string, string>();
@@ -655,7 +676,7 @@ namespace tConfigWrapper {
 					if (section.Name == "Stats") {
 						var splitElement = element.Content.Split('=');
 
-						string converted = ConvertField14(splitElement[0]);
+						string converted = ConvertField13(splitElement[0]);
 						var statField = typeof(TileInfo).GetField(converted);
 
 						if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
@@ -690,7 +711,7 @@ namespace tConfigWrapper {
 							case "tileStone":
 							case "tileWaterDeath":
 							case "tileLavaDeath":
-							case "table":
+							case "tileTable":
 							case "tileBlockLight":
 							case "tileNoSunLight":
 							case "tileDungeon":
@@ -737,6 +758,7 @@ namespace tConfigWrapper {
 			if (tileTexture != null) {
 				BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
 				tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
+				// Adds names to tiles that are ores
 				if (oreTile)
 					tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
 				else
@@ -747,10 +769,10 @@ namespace tConfigWrapper {
 				mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 		}
 
-		public static void GetTileMapEntries() {
+		public static void GetTileMapEntries() { // Loads tile map entries :\
 			loadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
 			loadProgress?.Invoke(0f);
-			SetupRecipes();
+			SetupRecipes(); // Check what tiles are used in recipes so it can add a name to it
 			int iterationCount = 0;
 			foreach (var modTile in tileMapData) {
 				iterationCount++;
