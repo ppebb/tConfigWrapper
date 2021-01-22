@@ -89,20 +89,22 @@ namespace tConfigWrapper {
 
 						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count();
 
-						Thread itemThread = new Thread(CreateItem);
-						itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
-						finished.AddCount();
+						if (contentCount != 0) {
+							Thread itemThread = new Thread(CreateItem);
+							itemThread.Start(new object[] {itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							finished.AddCount();
 
-						Thread npcThread = new Thread(CreateNPC);
-						npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
-						finished.AddCount();
+							Thread npcThread = new Thread(CreateNPC);
+							npcThread.Start(new object[] {npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							finished.AddCount();
 
-						Thread tileThread = new Thread(CreateTile);
-						tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
-						finished.AddCount();
+							Thread tileThread = new Thread(CreateTile);
+							tileThread.Start(new object[] {tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams});
+							finished.AddCount();
 
-						finished.Signal();
-						finished.Wait();
+							finished.Signal();
+							finished.Wait();
+						}
 
 						foreach (var memoryStream in streams) {
 							memoryStream.Value.Dispose();
@@ -156,12 +158,12 @@ namespace tConfigWrapper {
 		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {
 			List<string> fileNames = extractor.ArchiveFileNames.ToList();
 			loadSubProgressText?.Invoke("Decompressing");
-
+			double numThreads = Math.Min((double)ModContent.GetInstance<WrapperModConfig>().NumThreads, fileNames.Count);
 
 			using (CountdownEvent decompressCount = new CountdownEvent(1)) {
 				// Split the files into numThreads chunks
 				var chunks = new List<List<string>>();
-				int chunkSize = (int) Math.Round(fileNames.Count / (double)ModContent.GetInstance<WrapperModConfig>().NumThreads, MidpointRounding.AwayFromZero);
+				int chunkSize = (int) Math.Round(fileNames.Count / numThreads, MidpointRounding.AwayFromZero);
 
 				for (int i = 0; i < fileNames.Count; i += chunkSize) {
 					chunks.Add(fileNames.GetRange(i, Math.Min(chunkSize, fileNames.Count - i)));
