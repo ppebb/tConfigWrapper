@@ -154,13 +154,14 @@ namespace tConfigWrapper {
 		}
 
 		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {
-			int numThreads = 3;
 			List<string> fileNames = extractor.ArchiveFileNames.ToList();
+			loadSubProgressText?.Invoke("Decompressing");
+
 
 			using (CountdownEvent decompressCount = new CountdownEvent(1)) {
 				// Split the files into numThreads chunks
 				var chunks = new List<List<string>>();
-				int chunkSize = (int) Math.Round(fileNames.Count / 3d, MidpointRounding.AwayFromZero);
+				int chunkSize = (int) Math.Round(fileNames.Count / (double)ModContent.GetInstance<WrapperModConfig>().NumThreads, MidpointRounding.AwayFromZero);
 
 				for (int i = 0; i < fileNames.Count; i += chunkSize) {
 					chunks.Add(fileNames.GetRange(i, Math.Min(chunkSize, fileNames.Count - i)));
@@ -178,6 +179,8 @@ namespace tConfigWrapper {
 			}
 		}
 
+		public static int decompressTasksCompleted = 0;
+		public static int decompressTotalFiles = 0;
 		private static void DecompressMod(object callback) {
 			// Process the parameters
 			object[] parameters = (object[])callback;
@@ -189,7 +192,13 @@ namespace tConfigWrapper {
 			// Create a FileStream with the following arguments to be able to have multiple threads access it
 			using (FileStream fileStream = new FileStream(objPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream)) {
+				bool firstIteration = true;
 				foreach (var fileName in files) {
+					if (firstIteration) {
+						decompressTotalFiles += files.Count;
+						firstIteration = false;
+					}
+					loadProgress?.Invoke((float)decompressTasksCompleted / decompressTotalFiles);
 					// If the extension is not valid, skip the file
 					string extension = Path.GetExtension(fileName);
 					if (!(extension == ".ini" || extension == ".cs" || extension == ".png" || extension == ".dll"))
@@ -200,6 +209,7 @@ namespace tConfigWrapper {
 					extractor.ExtractFile(fileName, stream);
 					stream.Position = 0;
 					streams.TryAdd(fileName, stream);
+					decompressTasksCompleted++;
 				}
 			}
 
