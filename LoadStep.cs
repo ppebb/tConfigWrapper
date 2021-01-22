@@ -62,6 +62,10 @@ namespace tConfigWrapper {
 				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}");
 				using (var finished = new CountdownEvent(1)) {
 					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
+						if (extractor.ArchiveFileNames[0].Contains("Pickaxe+ v1.3a"))
+							//continue; // dont load bad mod, bad mod bad, really bad
+							loadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault if it takes 5000 millenniums");
+
 						MemoryStream configStream = new MemoryStream();
 						extractor.ExtractFile("Config.ini", configStream);
 						configStream.Position = 0L;
@@ -70,6 +74,9 @@ namespace tConfigWrapper {
 						configStream.Dispose();
 
 						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+
+						ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
+						DecompressMod(files[i], extractor, streams);
 
 						itemsToLoad.Clear();
 						tilesToLoad.Clear();
@@ -83,19 +90,23 @@ namespace tConfigWrapper {
 						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count();
 
 						Thread itemThread = new Thread(CreateItem);
-						itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 						finished.AddCount();
 
 						Thread npcThread = new Thread(CreateNPC);
-						npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 						finished.AddCount();
 
 						Thread tileThread = new Thread(CreateTile);
-						tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount });
+						tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 						finished.AddCount();
 
 						finished.Signal();
 						finished.Wait();
+
+						foreach (var memoryStream in streams) {
+							memoryStream.Value.Dispose();
+						}
 
 						foreach (var item in itemsToLoad) {
 							mod.AddItem(item.Key, item.Value);
@@ -140,6 +151,60 @@ namespace tConfigWrapper {
 			loadSubProgressText?.Invoke("");
 			loadProgressText?.Invoke("Loading mod");
 			loadProgress?.Invoke(0f);
+		}
+
+		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {
+			int numThreads = 3;
+			List<string> fileNames = extractor.ArchiveFileNames.ToList();
+
+			using (CountdownEvent decompressCount = new CountdownEvent(1)) {
+				// Split the files into numThreads chunks
+				var chunks = new List<List<string>>();
+				int chunkSize = (int) Math.Round(fileNames.Count / 3d, MidpointRounding.AwayFromZero);
+
+				for (int i = 0; i < fileNames.Count; i += chunkSize) {
+					chunks.Add(fileNames.GetRange(i, Math.Min(chunkSize, fileNames.Count - i)));
+				}
+
+				// Create threads and decompress the chunks
+				foreach (var chunk in chunks) {
+					ThreadPool.QueueUserWorkItem(DecompressMod, new object[] {objPath, chunk, streams, decompressCount});
+					decompressCount.AddCount();
+				}
+
+				// Wait for the CountdownEvent to end
+				decompressCount.Signal();
+				decompressCount.Wait();
+			}
+		}
+
+		private static void DecompressMod(object callback) {
+			// Process the parameters
+			object[] parameters = (object[])callback;
+			string objPath = parameters[0] as string;
+			List<string> files = parameters[1] as List<string>;
+			ConcurrentDictionary<string, MemoryStream> streams = parameters[2] as ConcurrentDictionary<string, MemoryStream>;
+			CountdownEvent countdown = parameters[3] as CountdownEvent;
+
+			// Create a FileStream with the following arguments to be able to have multiple threads access it
+			using (FileStream fileStream = new FileStream(objPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream)) {
+				foreach (var fileName in files) {
+					// If the extension is not valid, skip the file
+					string extension = Path.GetExtension(fileName);
+					if (!(extension == ".ini" || extension == ".cs" || extension == ".png" || extension == ".dll"))
+						continue;
+
+					// Create a MemoryStream and extract the file
+					MemoryStream stream = new MemoryStream();
+					extractor.ExtractFile(fileName, stream);
+					stream.Position = 0;
+					streams.TryAdd(fileName, stream);
+				}
+			}
+
+			// Signal the end of the thread
+			countdown.Signal();
 		}
 
 		public static void SetupRecipes() {
@@ -275,136 +340,127 @@ namespace tConfigWrapper {
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
 				loadSubProgressText?.Invoke(fileName);
-				CreateItem(fileName, (string)parameters[1], (string)parameters[2]);
+				CreateItem(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
 				taskCompletedCount++;
 				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
 
-		private static void CreateItem(string fileName, string modName, string extractPath) {
-			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
-			using (MemoryStream iniStream = new MemoryStream()) {
-				extractor.ExtractFile(fileName, iniStream);
-				iniStream.Position = 0;
+		private static void CreateItem(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+			MemoryStream iniStream = streams[fileName];
 
-				IniFileReader reader = new IniFileReader(iniStream);
-				IniFile iniFile = IniFile.FromStream(reader);
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
 
-				object info = new ItemInfo();
-				string tooltip = null;
+			object info = new ItemInfo();
+			string tooltip = null;
 
-				// Get the mod name
-				string itemName = Path.GetFileNameWithoutExtension(fileName);
-				string internalName = $"{modName}:{itemName}";
-				bool logItemAndModName = false;
+			// Get the mod name
+			string itemName = Path.GetFileNameWithoutExtension(fileName);
+			string internalName = $"{modName}:{itemName}";
+			bool logItemAndModName = false;
 
-				foreach (IniFileSection section in iniFile.sections) {
-					foreach (IniFileElement element in section.elements) {
-						switch (section.Name) {
-							case "Stats": {
-								var splitElement = element.Content.Split('=');
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					switch (section.Name) {
+						case "Stats": {
+							var splitElement = element.Content.Split('=');
 
-								var statField = typeof(ItemInfo).GetField(splitElement[0]);
+							var statField = typeof(ItemInfo).GetField(splitElement[0]);
 
-								switch (splitElement[0]) {
-									// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
-									case "toolTip":
-										tooltip = splitElement[1];
-										continue;
-									case "useSound": {
-										var soundStyleId = int.Parse(splitElement[1]);
-										var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
-										statField = typeof(ItemInfo).GetField("UseSound");
-										statField.SetValue(info, soundStyle);
-										continue;
+							switch (splitElement[0]) {
+								// Set the tooltip, has to be done manually since the toolTip field doesn't exist in 1.3
+								case "toolTip":
+									tooltip = splitElement[1];
+									continue;
+								case "useSound": {
+									var soundStyleId = int.Parse(splitElement[1]);
+									var soundStyle = new LegacySoundStyle(2, soundStyleId); // All items use the second sound ID
+									statField = typeof(ItemInfo).GetField("UseSound");
+									statField.SetValue(info, soundStyle);
+									continue;
+								}
+								case "createTileName": {
+									statField = typeof(ItemInfo).GetField("createTile");
+									var succeed = int.TryParse(splitElement[1], out var createTileID);
+									if (succeed) {
+										statField.SetValue(info, createTileID);
+										mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
+										logItemAndModName = true;
 									}
-									case "createTileName": {
-										statField = typeof(ItemInfo).GetField("createTile");
-										var succeed = int.TryParse(splitElement[1], out var createTileID);
-										if (succeed) {
-											statField.SetValue(info, createTileID);
-											mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
+									else {
+										int modTile = mod.TileType($"{modName}:{fileName}");
+										if (modTile != 0) {
+											statField.SetValue(info, modTile);
+											mod.Logger.Debug($"Mod tile {modTile} was successfully added");
 											logItemAndModName = true;
 										}
 										else {
-											int modTile = mod.TileType($"{modName}:{fileName}");
-											if (modTile != 0) {
-												statField.SetValue(info, modTile);
-												mod.Logger.Debug($"Mod tile {modTile} was successfully added");
-												logItemAndModName = true;
-											}
-											else {
-												mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
-												logItemAndModName = true;
-											}
-										}
-
-										continue;
-									}
-									case "type":
-										continue;
-									default: {
-										if (statField == null) {
-											mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
+											mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
 											logItemAndModName = true;
-											tConfigWrapper.ReportErrors = true;
-											continue;
 										}
-
-										break;
 									}
-								}
 
-								// Convert the value to an object of type statField.FieldType
-								TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
-								object realValue = converter.ConvertFromString(splitElement[1]);
-								statField.SetValue(info, realValue);
-								break;
+									continue;
+								}
+								case "type":
+									continue;
+								default: {
+									if (statField == null) {
+										mod.Logger.Debug($"Item field not found or invalid field! -> {splitElement[0]}");
+										logItemAndModName = true;
+										tConfigWrapper.ReportErrors = true;
+										continue;
+									}
+
+									break;
+								}
 							}
-							case "Recipe": {
-								if (!recipeDict.ContainsKey(internalName))
-									recipeDict.TryAdd(internalName, section);
-								break;
-							}
+
+							// Convert the value to an object of type statField.FieldType
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+							break;
+						}
+						case "Recipe": {
+							if (!recipeDict.ContainsKey(internalName))
+								recipeDict.TryAdd(internalName, section);
+							break;
 						}
 					}
 				}
+			}
 
-				if (logItemAndModName)
-					mod.Logger.Debug($"{modName}: {itemName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
+			if (logItemAndModName)
+				mod.Logger.Debug($"{modName}: {itemName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
 
-				// Check if a texture for the .ini file exists
-				string texturePath = Path.ChangeExtension(fileName, "png");
-				Texture2D itemTexture = null;
-				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
-					using (MemoryStream textureStream = new MemoryStream()) {
-						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
-						textureStream.Position = 0;
+			// Check if a texture for the .ini file exists
+			string texturePath = Path.ChangeExtension(fileName, "png");
+			Texture2D itemTexture = null;
+			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
+				itemTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
+			}
 
-						itemTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
-					}
-				}
-
-				int id;
-				if ((id = ItemID.FromLegacyName(itemName, 4)) != 0) {
-					if (!globalItemInfos.ContainsKey(id))
-						globalItemInfos.TryAdd(id, (ItemInfo)info);
-					else
-						globalItemInfos[id] = (ItemInfo)info;
-
-					reader.Dispose();
-					return;
-				}
-
-				if (itemTexture != null)
-					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+			int id;
+			if ((id = ItemID.FromLegacyName(itemName, 4)) != 0) {
+				if (!globalItemInfos.ContainsKey(id))
+					globalItemInfos.TryAdd(id, (ItemInfo)info);
 				else
-					itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+					globalItemInfos[id] = (ItemInfo)info;
 
 				reader.Dispose();
+				return;
 			}
+
+			if (itemTexture != null)
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip, itemTexture));
+			else
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, tooltip));
+
+			reader.Dispose();
+			//}
 		}
 
 		private static void CreateNPC(object stateInfo) {
@@ -413,104 +469,94 @@ namespace tConfigWrapper {
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
 				loadSubProgressText?.Invoke(fileName);
-				CreateNPC(fileName, (string)parameters[1], (string)parameters[2]);
+				CreateNPC(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
 				taskCompletedCount++;
 				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
 
-		private static void CreateNPC(string fileName, string modName, string extractPath) {
-			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
-			using (MemoryStream iniStream = new MemoryStream()) {
-				extractor.ExtractFile(fileName, iniStream);
-				iniStream.Position = 0L;
+		private static void CreateNPC(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+			MemoryStream iniStream = streams[fileName];
 
-				IniFileReader reader = new IniFileReader(iniStream);
-				IniFile iniFile = IniFile.FromStream(reader);
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
 
-				object info = new NpcInfo();
+			object info = new NpcInfo();
 
-				string npcName = Path.GetFileNameWithoutExtension(fileName);
-				string internalName = $"{modName}:{npcName}";
-				bool logNPCAndModName = false;
+			string npcName = Path.GetFileNameWithoutExtension(fileName);
+			string internalName = $"{modName}:{npcName}";
+			bool logNPCAndModName = false;
 
-				foreach (IniFileSection section in iniFile.sections) {
-					foreach (IniFileElement element in section.elements) {
-						switch (section.Name) {
-							case "Stats": {
-								var splitElement = element.Content.Split('=');
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					switch (section.Name) {
+						case "Stats": {
+							var splitElement = element.Content.Split('=');
 
-								string split1Correct = ConvertField14(splitElement[0]);
-								var statField = typeof(NpcInfo).GetField(split1Correct);
+							string split1Correct = ConvertField14(splitElement[0]);
+							var statField = typeof(NpcInfo).GetField(split1Correct);
 
-								switch (splitElement[0]) {
-									case "soundHit": {
-										var soundStyleID = int.Parse(splitElement[1]);
-										var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
-										statField = typeof(NpcInfo).GetField("HitSound");
-										statField.SetValue(info, soundStyle);
-										continue;
-									}
-									case "soundKilled": {
-										var soundStyleID = int.Parse(splitElement[1]);
-										var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
-										statField = typeof(NpcInfo).GetField("DeathSound");
-										statField.SetValue(info, soundStyle);
-										continue;
-									}
-									case "type":
-										continue;
-									default: {
-										if (statField == null) {
-											mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
-											logNPCAndModName = true;
-											tConfigWrapper.ReportErrors = true;
-											continue;
-										}
-
-										break;
-									}
+							switch (splitElement[0]) {
+								case "soundHit": {
+									var soundStyleID = int.Parse(splitElement[1]);
+									var soundStyle = new LegacySoundStyle(3, soundStyleID); // All NPC hit sounds use 3
+									statField = typeof(NpcInfo).GetField("HitSound");
+									statField.SetValue(info, soundStyle);
+									continue;
 								}
+								case "soundKilled": {
+									var soundStyleID = int.Parse(splitElement[1]);
+									var soundStyle = new LegacySoundStyle(4, soundStyleID); // All death sounds use 4
+									statField = typeof(NpcInfo).GetField("DeathSound");
+									statField.SetValue(info, soundStyle);
+									continue;
+								}
+								case "type":
+									continue;
+								default: {
+									if (statField == null) {
+										mod.Logger.Debug($"NPC field not found or invalid field! -> {splitElement[0]}");
+										logNPCAndModName = true;
+										tConfigWrapper.ReportErrors = true;
+										continue;
+									}
 
-								TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
-								object realValue = converter.ConvertFromString(splitElement[1]);
-								statField.SetValue(info, realValue);
-								break;
+									break;
+								}
 							}
-							case "BuffImmunities":
-								// do
-								break;
-							case "Drops":
-								// do
-								break;
+
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+							break;
 						}
+						case "BuffImmunities":
+							// do
+							break;
+						case "Drops":
+							// do
+							break;
 					}
 				}
-
-				if (logNPCAndModName)
-					mod.Logger.Debug($"{modName}: {npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
-
-				// Check if a texture for the .ini file exists
-				string texturePath = Path.ChangeExtension(fileName, "png");
-				Texture2D npcTexture = null;
-				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
-					using (MemoryStream textureStream = new MemoryStream()) {
-						extractor.ExtractFile(texturePath, textureStream); // Extract the texture
-						textureStream.Position = 0;
-
-						npcTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
-					}
-				}
-
-				if (npcTexture != null)
-					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
-				else
-					npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName));
-
-				reader.Dispose();
 			}
+
+			if (logNPCAndModName)
+				mod.Logger.Debug($"{modName}: {npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
+
+			// Check if a texture for the .ini file exists
+			string texturePath = Path.ChangeExtension(fileName, "png");
+			Texture2D npcTexture = null;
+			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
+				npcTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream); // Load a Texture2D from the stream
+			}
+
+			if (npcTexture != null)
+				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
+			else
+				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName));
+
+			reader.Dispose();
 		}
 
 		private static string ConvertField14(string splitElement) {
@@ -568,134 +614,125 @@ namespace tConfigWrapper {
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
 				loadSubProgressText?.Invoke(fileName);
-				CreateTile(fileName, (string)parameters[1], (string)parameters[2]);
+				CreateTile(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
 				taskCompletedCount++;
 				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
 
-		private static void CreateTile(string fileName, string modName, string extractPath) {
+		private static void CreateTile(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
 			Dictionary<string, bool> tileBoolFields = new Dictionary<string, bool>();
 			Dictionary<string, string> tileStringFields = new Dictionary<string, string>();
 
-			using (FileStream fileStream = new FileStream(extractPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream))
-			using (MemoryStream iniSteam = new MemoryStream()) {
-				extractor.ExtractFile(fileName, iniSteam);
-				iniSteam.Position = 0L;
+			MemoryStream iniStream = streams[fileName];
 
-				IniFileReader reader = new IniFileReader(iniSteam);
-				IniFile iniFile = IniFile.FromStream(reader);
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
 
-				object info = new TileInfo();
+			object info = new TileInfo();
 
-				string displayName = Path.GetFileNameWithoutExtension(fileName);
-				string internalName = $"{modName}:{displayName.Replace(" ", "").Replace("'", "")}";
-				bool logTileAndName = false;
-				bool oreTile = false;
+			string displayName = Path.GetFileNameWithoutExtension(fileName);
+			string internalName = $"{modName}:{displayName.Replace(" ", "").Replace("'", "")}";
+			bool logTileAndName = false;
+			bool oreTile = false;
 
-				foreach (IniFileSection section in iniFile.sections) {
-					foreach (IniFileElement element in section.elements) {
-						if (section.Name == "Stats") {
-							var splitElement = element.Content.Split('=');
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					if (section.Name == "Stats") {
+						var splitElement = element.Content.Split('=');
 
-							string converted = ConvertField14(splitElement[0]);
-							var statField = typeof(TileInfo).GetField(converted);
+						string converted = ConvertField14(splitElement[0]);
+						var statField = typeof(TileInfo).GetField(converted);
 
-							if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
-								oreTile = true;
+						if ((converted == "tileShine" && splitElement[1] != "0") || displayName.Contains("Ore"))
+							oreTile = true;
 
-							switch (converted) {
-								case "DropName":
-									splitElement[1] = splitElement[1].Replace(" ", "");
-									statField = typeof(TileInfo).GetField("drop");
-									statField.SetValue(info, mod.TileType(splitElement[1]));
-									continue;
-								case "minPick":
-								case "minAxe":
-								case "minHammer": {
-									if (converted == "minAxe")
-										splitElement[1] = (int.Parse(splitElement[1]) * 5).ToString();
-									statField = typeof(TileInfo).GetField("minPick");
-									int splitInt = int.Parse(splitElement[1]);
-									statField.SetValue(info, splitInt);
-									continue;
-								}
-								case "Width":
-								case "Height":
-								case "tileShine":
-									tileNumberFields.Add(converted, int.Parse(splitElement[1]));
-									continue;
-								case "tileLighted":
-								case "tileMergeDirt":
-								case "tileCut":
-								case "tileAlch":
-								case "tileShine2":
-								case "tileStone":
-								case "tileWaterDeath":
-								case "tileLavaDeath":
-								case "table":
-								case "tileBlockLight":
-								case "tileNoSunLight":
-								case "tileDungeon":
-								case "tileSolidTop":
-								case "tileSolid":
-								case "tileNoAttach":
-								case "tileNoFail":
-								//else if (converted == "furniture")  {
-								//	tileStringFields.Add(converted, splitElement[1]);
-								//	continue;
-								//}
-								case "tileFrameImportant":
-									tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
-									continue;
-								case "id":
-								case "type":
-								case "mineResist" when splitElement[1] == "0":
-									continue;
-								default: {
-									if (statField == null) {
-										mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
-										logTileAndName = true;
-										tConfigWrapper.ReportErrors = true;
-										continue;
-									}
-									break;
-								}
+						switch (converted) {
+							case "DropName":
+								splitElement[1] = splitElement[1].Replace(" ", "");
+								statField = typeof(TileInfo).GetField("drop");
+								statField.SetValue(info, mod.TileType(splitElement[1]));
+								continue;
+							case "minPick":
+							case "minAxe":
+							case "minHammer": {
+								if (converted == "minAxe")
+									splitElement[1] = (int.Parse(splitElement[1]) * 5).ToString();
+								statField = typeof(TileInfo).GetField("minPick");
+								int splitInt = int.Parse(splitElement[1]);
+								statField.SetValue(info, splitInt);
+								continue;
 							}
+							case "Width":
+							case "Height":
+							case "tileShine":
+								tileNumberFields.Add(converted, int.Parse(splitElement[1]));
+								continue;
+							case "tileLighted":
+							case "tileMergeDirt":
+							case "tileCut":
+							case "tileAlch":
+							case "tileShine2":
+							case "tileStone":
+							case "tileWaterDeath":
+							case "tileLavaDeath":
+							case "table":
+							case "tileBlockLight":
+							case "tileNoSunLight":
+							case "tileDungeon":
+							case "tileSolidTop":
+							case "tileSolid":
+							case "tileNoAttach":
+							case "tileNoFail":
+							//else if (converted == "furniture")  {
+							//	tileStringFields.Add(converted, splitElement[1]);
+							//	continue;
+							//}
+							case "tileFrameImportant":
+								tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
+								continue;
+							case "id":
+							case "type":
+							case "mineResist" when splitElement[1] == "0":
+								continue;
+							default: {
+								if (statField == null) {
+									mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
+									logTileAndName = true;
+									tConfigWrapper.ReportErrors = true;
+									continue;
+								}
 
-							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
-							object realValue = converter.ConvertFromString(splitElement[1]);
-							statField.SetValue(info, realValue);
+								break;
+							}
 						}
+
+						TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+						object realValue = converter.ConvertFromString(splitElement[1]);
+						statField.SetValue(info, realValue);
 					}
 				}
-
-				string texturePath = Path.ChangeExtension(fileName, "png");
-				Texture2D tileTexture = null;
-				if (!Main.dedServ && extractor.ArchiveFileNames.Contains(texturePath)) {
-					using (MemoryStream textureSteam = new MemoryStream()) {
-						extractor.ExtractFile(texturePath, textureSteam);
-						textureSteam.Position = 0L;
-
-						tileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureSteam);
-					}
-				}
-
-				if (tileTexture != null) {
-					BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
-					tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
-					if (oreTile)
-						tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
-					else
-						tileMapData.TryAdd(baseTile, new DisplayName(false, displayName));
-				}
-
-				if (logTileAndName)
-					mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 			}
+
+			string texturePath = Path.ChangeExtension(fileName, "png");
+			Texture2D tileTexture = null;
+			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
+				tileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream);
+			}
+
+			if (tileTexture != null) {
+				BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
+				tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
+				if (oreTile)
+					tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
+				else
+					tileMapData.TryAdd(baseTile, new DisplayName(false, displayName));
+			}
+
+			if (logTileAndName)
+				mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 		}
 
 		public static void GetTileMapEntries() {
