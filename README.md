@@ -1,5 +1,5 @@
-### tConfigWrapper
-- A mod that allows for tConfig mods to be run within tModLoader.
+# tConfig Wrapper
+tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoader.
 
 ### Progress
 ```diff
