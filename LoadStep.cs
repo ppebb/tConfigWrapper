@@ -232,7 +232,9 @@ namespace tConfigWrapper {
 					switch (key) {
 						case "Amount" when initialized: {
 							int id;
-							if ((id = ItemID.FromLegacyName(iniFileSection.Key.Split(':')[1], 4)) != 0)
+							string[] splitKey = iniFileSection.Key.Split(':');
+							string itemName = splitKey.Length == 1 ? splitKey[0] : splitKey[1];
+							if ((id = ItemID.FromLegacyName(itemName, 4)) != 0)
 								recipe?.SetResult(id, int.Parse(value));
 							else
 								recipe?.SetResult(mod, iniFileSection.Key, int.Parse(value));
@@ -246,7 +248,7 @@ namespace tConfigWrapper {
 								var recipeItemInfo = recipeItem.Split(null, 2);
 								int amount = int.Parse(recipeItemInfo[0]);
 
-								int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1]}");
+								int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1].RemoveIllegalCharacters()}");
 								if (itemID == 0)
 									itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
 
@@ -326,6 +328,9 @@ namespace tConfigWrapper {
 			// Get the mod name
 			string itemName = Path.GetFileNameWithoutExtension(fileName);
 			string internalName = $"{modName}:{itemName.RemoveIllegalCharacters()}";
+			// TODO: If the item is from Terraria, make it a GlobalItem
+			if (ItemID.FromLegacyName(itemName, 4) != 0)
+				internalName = itemName;
 			bool logItemAndModName = false;
 
 			foreach (IniFileSection section in iniFile.sections) {

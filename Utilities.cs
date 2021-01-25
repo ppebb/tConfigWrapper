@@ -99,6 +99,7 @@ namespace tConfigWrapper {
 					return noSpaceTile;
 			}
 		}
+
 		/// <summary>
 		/// Checks if an ID can be converted to a 1.3 string
 		/// </summary>
