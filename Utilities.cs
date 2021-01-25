@@ -133,16 +133,20 @@ namespace tConfigWrapper {
 		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
-		/// <param name="contentString">Should be the internal name of the content</param>
+		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla string passing it in with {modName} in front will still work fine</param>
 		/// <returns></returns>
 		internal static int StringToContent(Mod mod, string contentIDType, string modContentMethod, string contentString) {
 			MethodInfo containsName = typeof(IdDictionary).GetMethod("ContainsName"); // Reflection allows for XContentID.Search.Method
 			MethodInfo getID = typeof(IdDictionary).GetMethod("GetId");
-			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(mod, new object[] { contentString }); // Is mod.XType
+			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(mod, new object[] { contentString.RemoveIllegalCharacters() }); // Is mod.XType
 			var search = typeof(Main).Assembly.GetType($"Terraria.ID.{contentIDType}").GetField("Search", BindingFlags.Static | BindingFlags.Public).GetValue(null);
-			if (!(bool)containsName.Invoke(search, new object[] { contentString.Split(':')[1] }) && !CheckIDConversion(contentString) && contentInt == 0) { // Checks that the ID doesn't exist, can't be converted to a 1.3 ID, and isn't mod content
+			bool isVanillaItem = (bool)containsName.Invoke(search, new object[] { contentString.Split(':')[1].RemoveIllegalCharacters() });
+			if (!isVanillaItem && !CheckIDConversion(contentString) && contentInt == 0) { // Checks that the ID doesn't exist, can't be converted to a 1.3 ID, and isn't mod content
 				mod.Logger.Debug($"{contentIDType} {contentString} does not exist");
 				return 0;
+			}
+			else if (isVanillaItem) {
+				return (int)getID.Invoke(search, new object[] { contentString.Split(':')[1].RemoveIllegalCharacters() });
 			}
 			else if (CheckIDConversion(contentString)) { // Checks if contentString is a vanilla ID that can be converted to 1.3
 				contentString = ConvertIDTo13(contentString);
