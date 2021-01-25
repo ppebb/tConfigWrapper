@@ -51,7 +51,7 @@ namespace tConfigWrapper {
 
 		public override void Unload() {
 			tCFModMenu.Deactivate();
-			ReportErrors = false;
+			Utilities.UnloadStaticFields();
 		}
 
 		public override void Close() {

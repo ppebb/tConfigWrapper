@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using tConfigWrapper.DataTemplates;
+using static tConfigWrapper.Utilities;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
@@ -25,12 +26,11 @@ namespace tConfigWrapper {
 		public static Action<string> loadSubProgressText; // Subtext during loading
 		public static int taskCompletedCount; // Int used for tracking load progress during content loading
 		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>(); // Dictionaries are selfexplanatory, concurrent so that multiple threads can access them without dying
-
-		private static readonly ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
-		private static readonly ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
-		private static readonly ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
-		private static readonly ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
-		public static ConcurrentDictionary<ModTile, DisplayName> tileMapData = new ConcurrentDictionary<ModTile, DisplayName>();
+		private static ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
+		private static ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
+		private static ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
+		private static ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
+		public static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
@@ -181,6 +181,7 @@ namespace tConfigWrapper {
 
 		public static int decompressTasksCompleted = 0; // Total number of items decompressed
 		public static int decompressTotalFiles = 0; // Total number of items that need to be decompressed
+
 		private static void DecompressMod(object callback) {
 			// Process the parameters
 			object[] parameters = (object[])callback;
@@ -262,33 +263,31 @@ namespace tConfigWrapper {
 						}
 						case "Tiles": { // Does stuff to check for modtiles and vanilla tiles that have changed their name since 1.1.2
 							foreach (string recipeTile in value.Split(',')) {
-								string noSpaceTile = recipeTile.Replace(" ", "");
-								int tileInt = mod.TileType($"{modName}:{noSpaceTile}");
-								var tileModTile = mod.GetTile($"{modName}:{noSpaceTile}");
-								if (!TileID.Search.ContainsName(noSpaceTile) && !CheckStringConversion(noSpaceTile) &&
-									tileInt == 0) {
+								recipeTile.RemoveIllegalCharacters();
+								int tileInt = mod.TileType($"{modName}:{recipeTile}");
+								var tileModTile = mod.GetTile($"{modName}:{recipeTile}");
+								if (!TileID.Search.ContainsName(recipeTile) && !CheckIDConversion(recipeTile) && tileInt == 0 && tileModTile == null) { // Would love to replace this with Utilities.StringToContent() but this one is special and needs to add stuff to a dictionary so I can't
 									if (initialized) {
-										mod.Logger.Debug($"TileID {noSpaceTile} does not exist"); // We will have to manually convert anything that breaks lmao
+										mod.Logger.Debug($"TileID {recipeTile} does not exist"); // We will have to manually convert anything that breaks lmao
 										tConfigWrapper.ReportErrors = true;
 									}
 								}
-								else if (CheckStringConversion(noSpaceTile)) {
-									string converted = ConvertTileStringTo13(noSpaceTile);
+								else if (CheckIDConversion(recipeTile)) {
+									string converted = ConvertIDTo13(recipeTile);
 									if (initialized)
 										recipe?.AddTile(TileID.Search.GetId(converted));
 								}
 								else if (tileInt != 0) {
 									if (initialized) {
 										recipe?.AddTile(tileModTile);
-										mod.Logger.Debug($"{modName}:{noSpaceTile} added to recipe through mod.TileType!");
+										mod.Logger.Debug($"{modName}:{recipeTile} added to recipe through mod.TileType!");
 									}
 									else {
-										DisplayName preserveName = tileMapData[tileModTile]; // DisplayName is a struct so I can store 3 values in one dictionary
-										tileMapData[tileModTile] = new DisplayName(true, preserveName.Name); // I'd like to be able to do something like tileMapData[tileModTile].DoDisplay = true but I can't because readonly :letsfu:
+										tileMapData[tileModTile] = (true, tileMapData[tileModTile].Item2); // I do this because either I can't just change Item1 directly to true OR because I am very not smart and couldn't figure out how to set it individually.
 									}
 								}
 								else if (initialized)
-									recipe?.AddTile(TileID.Search.GetId(noSpaceTile));
+									recipe?.AddTile(TileID.Search.GetId(recipeTile));
 							}
 
 							break;
@@ -299,52 +298,6 @@ namespace tConfigWrapper {
 				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
 					recipe?.AddRecipe();
 				loadProgress.Invoke(progressCount / recipeDict.Count);
-			}
-		}
-		/// <summary>
-		/// Converts tile strings to the 1.3 equivalent
-		/// </summary>
-		/// <param name="noSpaceTile"></param>
-		/// <returns></returns>
-		private static string ConvertTileStringTo13(string noSpaceTile) {
-			switch (noSpaceTile) {
-				case "Anvil":
-					return "Anvils";
-				case "WorkBench":
-				case "Workbench":
-					return "WorkBenches";
-				case "Furnace":
-					return "Furnaces";
-				case "Tinkerer'sWorkshop":
-					return "TinkerersWorkbench";
-				case "Bottle":
-					return "Bottles";
-				case "Bookcase":
-					return "Bookcases";
-				case "Table":
-					return "Tables";
-				default:
-					return noSpaceTile;
-			}
-		}
-		/// <summary>
-		/// Checks if a tile can be converted to a 1.3 string
-		/// </summary>
-		/// <param name="noSpaceTile"></param>
-		/// <returns></returns>
-		private static bool CheckStringConversion(string noSpaceTile) {
-			switch (noSpaceTile) {
-				case "Anvil":
-				case "WorkBench":
-				case "Workbench":
-				case "Furnace":
-				case "Tinkerer'sWorkshop":
-				case "Bottle":
-				case "Bookcase":
-				case "Table":
-					return true;
-				default:
-					return false;
 			}
 		}
 
@@ -372,7 +325,7 @@ namespace tConfigWrapper {
 
 			// Get the mod name
 			string itemName = Path.GetFileNameWithoutExtension(fileName);
-			string internalName = $"{modName}:{itemName}";
+			string internalName = $"{modName}:{itemName.RemoveIllegalCharacters()}";
 			bool logItemAndModName = false;
 
 			foreach (IniFileSection section in iniFile.sections) {
@@ -505,15 +458,15 @@ namespace tConfigWrapper {
 		}
 
 		private static void CreateNPC(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) { // I don't know how this works either
+			List<(int, int?, string, float)> dropList = new List<(int, int?, string, float)>();
 			MemoryStream iniStream = streams[fileName];
-
 			IniFileReader reader = new IniFileReader(iniStream);
 			IniFile iniFile = IniFile.FromStream(reader);
 
 			object info = new NpcInfo();
 
 			string npcName = Path.GetFileNameWithoutExtension(fileName);
-			string internalName = $"{modName}:{npcName}";
+			string internalName = $"{modName}:{npcName.RemoveIllegalCharacters()}";
 			bool logNPCAndModName = false;
 
 			foreach (IniFileSection section in iniFile.sections) {
@@ -559,18 +512,44 @@ namespace tConfigWrapper {
 							statField.SetValue(info, realValue);
 							break;
 						}
-						case "BuffImmunities":
-							// do
+						case "Buff Immunities": {
+							var splitElement = element.Content.Split('=');
+							splitElement[0].Replace(" ", "").Replace("!", "");
+
+							FieldInfo npcInfoImmunity = typeof(NpcInfo).GetField("buffImmune");
+							if (BuffID.Search.ContainsName(splitElement[0])) { // Will 100% need to adjust this once we get mod buff loading implemented
+								bool[] immunity = new bool[BuffLoader.BuffCount];
+								immunity[BuffID.Search.GetId(splitElement[0])] = bool.Parse(splitElement[1]);
+								npcInfoImmunity.SetValue(info, immunity);
+							}
+							else
+								mod.Logger.Debug($"{splitElement[0]} doesn't exist!"); // Will have to manually convert 
 							break;
+						}
 						case "Drops":
-							// do
+
+							// example of drop string: 1-4 Golden Flame=0.7
+							string dropRangeString = element.Content.Split(new[] { ' ' }, 2)[0]; // This gets the drop range, everthing before the first space
+							string dropItemString = element.Content.Split(new[] { ' ' }, 2)[1].Split('=')[0]; // This gets everything after the first space, then it splits at the = and gets everything before it
+							string dropChanceString = element.Content.Split('=')[1]; // Gets everything after the = sign
+							int min;
+							int? max = null;
+							if (dropRangeString.Contains("-")) {
+								min = int.Parse(dropRangeString.Split('-')[0]); 
+								max = int.Parse(dropRangeString.Split('-')[1]) + 1; // + 1 because the max is exclusive in Main.rand.Next()
+							}
+							else {
+								min = int.Parse(dropRangeString);
+							}
+
+							dropList.Add((min, max, $"{modName}:{dropItemString}", float.Parse(dropChanceString) / 100));
 							break;
 					}
 				}
 			}
 
 			if (logNPCAndModName)
-				mod.Logger.Debug($"{modName}: {npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
+				mod.Logger.Debug($"{modName}:{npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
 
 			// Check if a texture for the .ini file exists
 			string texturePath = Path.ChangeExtension(fileName, "png");
@@ -580,65 +559,11 @@ namespace tConfigWrapper {
 			}
 
 			if (npcTexture != null)
-				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName, npcTexture));
+				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, dropList, npcName, npcTexture));
 			else
-				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, npcName));
+				npcsToLoad.TryAdd(internalName, new BaseNPC((NpcInfo)info, dropList, npcName));
 
 			reader.Dispose();
-		}
-
-		/// <summary>
-		/// Converts fields to the 1.3 equivalent
-		/// </summary>
-		/// <param name="splitElement"></param>
-		/// <returns></returns>
-		private static string ConvertField13(string splitElement) {
-			switch (splitElement) {
-				case "knockBackResist":
-					return "knockBackResist";
-				case "hitSoundList":
-					return "soundStyle";
-				case "hitSound":
-					return "soundType";
-				case "pick":
-				case "axe":
-				case "hammer":
-					return "mineResist";
-				case "Shine":
-					return "tileShine";
-				case "Shine2":
-					return "tileShine2";
-				case "Lighted":
-					return "tileLighted";
-				case "MergeDirt":
-					return "tileMergeDirt";
-				case "Cut":
-					return "tileCut";
-				case "Alch":
-					return "tileAlch";
-				case "Stone":
-					return "tileStone";
-				case "WaterDeath":
-					return "tileWaterDeath";
-				case "LavaDeath":
-					return "tileLavaDeath";
-				case "Table":
-					return "table";
-				case "BlockLight":
-					return "tileBlockLight";
-				case "NoSunLight":
-					return "tileNoSunLight";
-				case "Dungeon":
-					return "tileDungeon";
-				case "SolidTop":
-					return "tileSolidTop";
-				case "Solid":
-					return "tileSolid";
-				case "NoAttach":
-					return "tileNoAttach";
-				default:
-					return splitElement;
-			}
 		}
 
 		private static void CreateTile(object stateInfo) { // This is literally for easier multithreading again
@@ -667,7 +592,7 @@ namespace tConfigWrapper {
 			object info = new TileInfo();
 
 			string displayName = Path.GetFileNameWithoutExtension(fileName);
-			string internalName = $"{modName}:{displayName.Replace(" ", "").Replace("'", "")}";
+			string internalName = $"{modName}:{displayName.RemoveIllegalCharacters()}";
 			bool logTileAndName = false;
 			bool oreTile = false;
 
@@ -758,15 +683,24 @@ namespace tConfigWrapper {
 			if (tileTexture != null) {
 				BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
 				tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
-				// Adds names to tiles that are ores
-				if (oreTile)
-					tileMapData.TryAdd(baseTile, new DisplayName(true, displayName));
-				else
-					tileMapData.TryAdd(baseTile, new DisplayName(false, displayName));
+				tileMapData.TryAdd(baseTile, (oreTile, displayName));
 			}
 
 			if (logTileAndName)
 				mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
+		}
+
+		private static void CreateBuff(object stateInfo) { // This is literally for easier multithreading again
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				//CreateBuff(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
+			countdown.Signal();
 		}
 
 		public static void GetTileMapEntries() { // Loads tile map entries :\
@@ -776,7 +710,7 @@ namespace tConfigWrapper {
 			int iterationCount = 0;
 			foreach (var modTile in tileMapData) {
 				iterationCount++;
-				loadSubProgressText?.Invoke($"{modTile.Value.Name}");
+				loadSubProgressText?.Invoke($"{modTile.Value.Item2}");
 				Texture2D tileTex = Main.tileTexture[modTile.Key.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
@@ -788,16 +722,30 @@ namespace tConfigWrapper {
 					.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
 					.Select(grp => grp.Key)
 					.First();
-				if (modTile.Value.DoDisplayName) {
-					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Value.Name));
-					mod.Logger.Debug($"Added translation and color for {modTile.Value.Name}");
+				if (modTile.Value.Item1) {
+					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Value.Item2));
+					mod.Logger.Debug($"Added translation and color for {modTile.Value.Item2}");
 				}
 				else {
 					modTile.Key.AddMapEntry(mainColor);
-					mod.Logger.Debug($"Added color for {modTile.Value.Name}");
+					mod.Logger.Debug($"Added color for {modTile.Value.Item2}");
 				}
 				loadProgress?.Invoke(iterationCount / tileMapData.Count);
 			}
+		}
+
+		public static void UnloadStaticFields() {
+			files = null;
+			loadProgressText = null;
+			loadProgress = null; 
+			loadSubProgressText = null;
+			globalItemInfos = null;
+			recipeDict = null;
+			itemsToLoad = null;
+			tilesToLoad = null;
+			npcsToLoad = null;
+			tileMapData = null;
+
 		}
 	}
 }

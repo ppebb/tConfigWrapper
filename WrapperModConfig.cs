@@ -1,6 +1,4 @@
-﻿using System.Threading;
-using System.ComponentModel;
-using Terraria.ModLoader;
+﻿using System.ComponentModel;
 using Terraria.ModLoader.Config;
 
 namespace tConfigWrapper {
