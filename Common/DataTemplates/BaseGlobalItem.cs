@@ -2,7 +2,7 @@
 using Terraria;
 using Terraria.ModLoader;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 	public class BaseGlobalItem : GlobalItem {
 		public override void SetDefaults(Item item) {
 			if (LoadStep.globalItemInfos.TryGetValue(item.type, out ItemInfo info)) {

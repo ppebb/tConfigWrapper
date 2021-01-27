@@ -4,10 +4,10 @@ using System.Reflection;
 using Terraria;
 using Terraria.ModLoader;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 
 	public class BaseNPC : ModNPC {
-		public override string Texture => "tConfigWrapper/DataTemplates/MissingTexture";
+		public override string Texture => "tConfigWrapper/Common/DataTemplates/MissingTexture";
 		public override bool CloneNewInstances => true;
 
 		private NpcInfo _info;
@@ -15,8 +15,7 @@ namespace tConfigWrapper.DataTemplates {
 		private readonly Texture2D _texture;
 		private readonly List<(int, int?, string, float)> _dropList = new List<(int, int?, string, float)>();
 
-		public BaseNPC() {
-		}
+		public BaseNPC() { }
 
 		public BaseNPC(NpcInfo npcInfo, List<(int, int?, string, float)> dropList, string name = null, Texture2D texture = null) {
 			_info = npcInfo;

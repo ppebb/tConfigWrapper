@@ -1,7 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Terraria.Audio;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 	public struct NpcInfo {
 		public int? teleportStyle;
 		public float? teleportTime;

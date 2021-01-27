@@ -3,9 +3,9 @@ using System.Reflection;
 using Terraria;
 using Terraria.ModLoader;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 	public class BaseItem : ModItem {
-		public override string Texture => "tConfigWrapper/DataTemplates/MissingTexture";
+		public override string Texture => "tConfigWrapper/Common/DataTemplates/MissingTexture";
 		public override bool CloneNewInstances => true;
 
 		private ItemInfo _info;

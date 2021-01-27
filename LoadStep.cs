@@ -10,8 +10,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using tConfigWrapper.DataTemplates;
-using static tConfigWrapper.Utilities;
+using tConfigWrapper.Common.DataTemplates;
+using static tConfigWrapper.Common.Utilities;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
@@ -30,6 +30,7 @@ namespace tConfigWrapper {
 		private static ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
 		private static ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
 		private static ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
+		private static ConcurrentDictionary<string, ModProjectile> projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
 		public static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 
 		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
@@ -76,14 +77,16 @@ namespace tConfigWrapper {
 						itemsToLoad.Clear();
 						tilesToLoad.Clear();
 						npcsToLoad.Clear();
+						projectilesToLoad.Clear();
 						taskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
 						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\") && Path.GetExtension(name) == ".ini");
+						IEnumerable<string> projectileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Projectile\\") && Path.GetExtension(name) == "ini.");
 
-						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count(); // Count all content in mod for accurate loading progress
+						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count() + projectileFiles.Count(); // Count all content in mod for accurate loading progress
 
 						if (contentCount != 0)
 						{
@@ -97,6 +100,10 @@ namespace tConfigWrapper {
 
 							Thread tileThread = new Thread(CreateTile);
 							tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							finished.AddCount();
+
+							Thread projectileThread = new Thread(CreateProjectile);
+							projectileThread.Start(new object[] { projectileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							finished.Signal();
@@ -118,6 +125,10 @@ namespace tConfigWrapper {
 
 						foreach (var npc in npcsToLoad) {
 							mod.AddNPC(npc.Key, npc.Value);
+						}
+
+						foreach (var projectile in projectilesToLoad) {
+							mod.AddProjectile(projectile.Key, projectile.Value);
 						}
 					}
 				}
@@ -265,33 +276,30 @@ namespace tConfigWrapper {
 						}
 						case "Tiles": { // Does stuff to check for modtiles and vanilla tiles that have changed their name since 1.1.2
 							foreach (string recipeTile in value.Split(',')) {
-								recipeTile.RemoveIllegalCharacters();
-								int tileInt = mod.TileType($"{modName}:{recipeTile}");
-								var tileModTile = mod.GetTile($"{modName}:{recipeTile}");
-								if (!TileID.Search.ContainsName(recipeTile) && !CheckIDConversion(recipeTile) && tileInt == 0 && tileModTile == null) { // Would love to replace this with Utilities.StringToContent() but this one is special and needs to add stuff to a dictionary so I can't
+								string recipeTileIR = recipeTile.RemoveIllegalCharacters();
+								int tileInt = mod.TileType($"{modName}:{recipeTileIR}");
+								var tileModTile = mod.GetTile($"{modName}:{recipeTileIR}");
+								if (!TileID.Search.ContainsName(recipeTileIR) && !CheckIDConversion(recipeTileIR) && tileInt == 0 && tileModTile == null) { // Would love to replace this with Utilities.StringToContent() but this one is special and needs to add stuff to a dictionary so I can't
 									if (initialized) {
-										mod.Logger.Debug($"TileID {recipeTile} does not exist"); // We will have to manually convert anything that breaks lmao
+										mod.Logger.Debug($"TileID {modName}:{recipeTileIR} does not exist"); // We will have to manually convert anything that breaks lmao
 										tConfigWrapper.ReportErrors = true;
 									}
 								}
-								else if (CheckIDConversion(recipeTile)) {
-									string converted = ConvertIDTo13(recipeTile);
+								else if (CheckIDConversion(recipeTileIR) || TileID.Search.ContainsName(recipeTileIR)) {
+									string converted = ConvertIDTo13(recipeTileIR);
 									if (initialized)
 										recipe?.AddTile(TileID.Search.GetId(converted));
 								}
 								else if (tileInt != 0) {
 									if (initialized) {
 										recipe?.AddTile(tileModTile);
-										mod.Logger.Debug($"{modName}:{recipeTile} added to recipe through mod.TileType!");
+										mod.Logger.Debug($"{modName}:{recipeTileIR} added to recipe through mod.TileType!");
 									}
 									else {
 										tileMapData[tileModTile] = (true, tileMapData[tileModTile].Item2); // I do this because either I can't just change Item1 directly to true OR because I am very not smart and couldn't figure out how to set it individually.
 									}
 								}
-								else if (initialized)
-									recipe?.AddTile(TileID.Search.GetId(recipeTile));
 							}
-
 							break;
 						}
 					}
@@ -299,7 +307,8 @@ namespace tConfigWrapper {
 
 				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
 					recipe?.AddRecipe();
-				loadProgress.Invoke(progressCount / recipeDict.Count);
+				if (initialized)
+					loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
 		}
 
@@ -414,7 +423,7 @@ namespace tConfigWrapper {
 			}
 
 			if (logItemAndModName)
-				mod.Logger.Debug($"{modName}: {itemName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
+				mod.Logger.Debug($"{internalName}"); //Logs the item and mod name if "Field not found or invalid field". Mod and item name show up below the other log line
 
 			string toolTip = null;
 
@@ -554,7 +563,7 @@ namespace tConfigWrapper {
 			}
 
 			if (logNPCAndModName)
-				mod.Logger.Debug($"{modName}:{npcName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
+				mod.Logger.Debug($"{internalName}"); //Logs the npc and mod name if "Field not found or invalid field". Mod and npc name show up below the other log line
 
 			// Check if a texture for the .ini file exists
 			string texturePath = Path.ChangeExtension(fileName, "png");
@@ -598,7 +607,7 @@ namespace tConfigWrapper {
 
 			string displayName = Path.GetFileNameWithoutExtension(fileName);
 			string internalName = $"{modName}:{displayName.RemoveIllegalCharacters()}";
-			bool logTileAndName = false;
+			bool logTileAndModName = false;
 			bool oreTile = false;
 
 			foreach (IniFileSection section in iniFile.sections) {
@@ -663,7 +672,7 @@ namespace tConfigWrapper {
 							default: {
 								if (statField == null) {
 									mod.Logger.Debug($"Tile field not found or invalid field! -> {converted}");
-									logTileAndName = true;
+									logTileAndModName = true;
 									tConfigWrapper.ReportErrors = true;
 									continue;
 								}
@@ -687,25 +696,12 @@ namespace tConfigWrapper {
 
 			if (tileTexture != null) {
 				BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
-				tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/DataTemplates/MissingTexture"));
+				tilesToLoad.TryAdd(internalName, (baseTile, "tConfigWrapper/Common/DataTemplates/MissingTexture"));
 				tileMapData.TryAdd(baseTile, (oreTile, displayName));
 			}
 
-			if (logTileAndName)
-				mod.Logger.Debug($"{modName}: {displayName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
-		}
-
-		private static void CreateBuff(object stateInfo) { // This is literally for easier multithreading again
-			object[] parameters = (object[])stateInfo;
-			CountdownEvent countdown = (CountdownEvent)parameters[3];
-
-			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
-				//CreateBuff(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
-			}
-			countdown.Signal();
+			if (logTileAndModName)
+				mod.Logger.Debug($"{internalName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 		}
 
 		public static void GetTileMapEntries() { // Loads tile map entries :\
@@ -736,6 +732,66 @@ namespace tConfigWrapper {
 					mod.Logger.Debug($"Added color for {modTile.Value.Item2}");
 				}
 				loadProgress?.Invoke(iterationCount / tileMapData.Count);
+			}
+		}
+
+		private static void CreateProjectile(object stateInfo) { // This is literally for easier multithreading again
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countdown = (CountdownEvent)parameters[3];
+
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				CreateProjectile(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
+			countdown.Signal();
+		}
+
+		private static void CreateProjectile(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+			MemoryStream iniStream = streams[fileName];
+
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
+
+			object info = new ProjectileInfo();
+
+			string projectileName = Path.GetFileNameWithoutExtension(fileName);
+			string internalName = $"{modName}:{projectileName.RemoveIllegalCharacters()}";
+			bool logProjectileAndModName = false;
+
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					switch (section.Name) {
+						case "Stats": {
+							var splitElement = element.Content.Split('=');
+
+							var statField = typeof(ProjectileInfo).GetField(splitElement[0]);
+
+							switch (splitElement[0]) {
+								default: {
+									if (statField == null) {
+										mod.Logger.Debug($"Projectile field not found or invalid field! -> {splitElement[0]}");
+										logProjectileAndModName = true;
+										tConfigWrapper.ReportErrors = true;
+										continue;
+									}
+									break;
+								}
+							}
+
+							//Conversion garbage
+							TypeConverter converter = TypeDescriptor.GetConverter(statField.FieldType);
+							object realValue = converter.ConvertFromString(splitElement[1]);
+							statField.SetValue(info, realValue);
+							break;
+						}
+					}
+				}
+			}
+
+			if (logProjectileAndModName) {
+				mod.Logger.Debug($"{internalName}");
 			}
 		}
 

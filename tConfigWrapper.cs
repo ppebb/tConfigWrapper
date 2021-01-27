@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Collections.Generic;
+using tConfigWrapper.Common;
 using tConfigWrapper.UI;
 using Terraria;
 using Terraria.ModLoader;

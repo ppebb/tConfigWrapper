@@ -7,7 +7,7 @@ using Terraria.ID;
 using Terraria.ObjectData;
 using Terraria.ModLoader;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 	public class BaseTile : ModTile {
 
 		private TileInfo _info;

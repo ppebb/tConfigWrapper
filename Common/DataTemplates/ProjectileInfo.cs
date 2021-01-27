@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 
-namespace tConfigWrapper.DataTemplates {
+namespace tConfigWrapper.Common.DataTemplates {
 	public struct ProjectileInfo {
 		public float? ownerHitCheckDistance;
 		public bool? arrow;

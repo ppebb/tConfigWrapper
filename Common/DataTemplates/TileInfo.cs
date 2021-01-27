@@ -1,4 +1,4 @@
-﻿namespace tConfigWrapper.DataTemplates {
+﻿namespace tConfigWrapper.Common.DataTemplates {
 	public struct TileInfo {
 		public int? soundType;
 		public int? soundStyle;

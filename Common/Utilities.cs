@@ -2,10 +2,9 @@
 using System.Reflection;
 using System;
 using Terraria;
-using Terraria.ID;
 using Terraria.ModLoader;
 
-namespace tConfigWrapper {
+namespace tConfigWrapper.Common {
 	/// <summary>
 	/// A class containing utility methods
 	/// </summary>
@@ -87,7 +86,7 @@ namespace tConfigWrapper {
 					return "WorkBenches";
 				case "Furnace":
 					return "Furnaces";
-				case "Tinkerer'sWorkshop":
+				case "TinkerersWorkshop":
 					return "TinkerersWorkbench";
 				case "Bottle":
 					return "Bottles";
@@ -111,7 +110,7 @@ namespace tConfigWrapper {
 				case "WorkBench":
 				case "Workbench":
 				case "Furnace":
-				case "Tinkerer'sWorkshop":
+				case "TinkerersWorkshop":
 				case "Bottle":
 				case "Bookcase":
 				case "Table":
@@ -141,16 +140,17 @@ namespace tConfigWrapper {
 			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(mod, new object[] { contentString.RemoveIllegalCharacters() }); // Is mod.XType
 			var search = typeof(Main).Assembly.GetType($"Terraria.ID.{contentIDType}").GetField("Search", BindingFlags.Static | BindingFlags.Public).GetValue(null);
 			bool isVanillaItem = (bool)containsName.Invoke(search, new object[] { contentString.Split(':')[1].RemoveIllegalCharacters() });
+			string removeModAndIllegal = contentString.Split(':')[1].RemoveIllegalCharacters();
 			if (!isVanillaItem && !CheckIDConversion(contentString) && contentInt == 0) { // Checks that the ID doesn't exist, can't be converted to a 1.3 ID, and isn't mod content
 				mod.Logger.Debug($"{contentIDType} {contentString} does not exist");
 				return 0;
 			}
 			else if (isVanillaItem) {
-				return (int)getID.Invoke(search, new object[] { contentString.Split(':')[1].RemoveIllegalCharacters() });
+				return (int)getID.Invoke(search, new object[] { removeModAndIllegal });
 			}
-			else if (CheckIDConversion(contentString)) { // Checks if contentString is a vanilla ID that can be converted to 1.3
-				contentString = ConvertIDTo13(contentString);
-				return (int)getID.Invoke(search, new object[] { contentString });
+			else if (CheckIDConversion(removeModAndIllegal)) { // Checks if contentString is a vanilla ID that can be converted to 1.3
+				removeModAndIllegal = ConvertIDTo13(removeModAndIllegal);
+				return (int)getID.Invoke(search, new object[] { removeModAndIllegal });
 			}
 			else if (contentInt != 0) { // This if check is useless but I still have it because yes
 				return contentInt;
