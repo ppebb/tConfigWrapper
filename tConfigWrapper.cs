@@ -110,7 +110,7 @@ namespace tConfigWrapper {
 						logResponseString = (int)stateInfo == 0 ? $"https://paste.mod.gg/{logResponseString}" : $"https://hatebin.com{logResponseString}";
 
 						// Send link to discord via a webhook
-						var discordRequest = (HttpWebRequest)WebRequest.Create(Telemetry.WebhookURL);
+						var discordRequest = (HttpWebRequest)WebRequest.Create(Telemetry.WebhookURL); // Note that the URL has been changed from previous commits, so don't waste your time trying to send NSFW to the webhook.
 						//discordRequest.Headers.Add("user-agent", "tConfig Wrapper?");
 						discordRequest.UserAgent = "tConfig Wrapper?";
 						discordRequest.Method = "POST";
