@@ -7,6 +7,7 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 
 # Doing:
 ! Ini loading of npcs
+! Projectiles
 ! Items
 ! Tiles
 
