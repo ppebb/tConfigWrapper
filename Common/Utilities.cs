@@ -1,6 +1,8 @@
-﻿using ReLogic.Reflection;
+﻿using Microsoft.Xna.Framework;
+using ReLogic.Reflection;
 using System.Reflection;
 using System;
+using System.IO;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -156,6 +158,10 @@ namespace tConfigWrapper.Common {
 				return contentInt;
 			}
 			return 0;
+		}
+
+		internal static Color ReadRGBA(this BinaryReader reader) {
+			return new Color(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
 		}
 	}
 }
