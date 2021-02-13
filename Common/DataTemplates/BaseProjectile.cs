@@ -28,6 +28,10 @@ namespace tConfigWrapper.Common.DataTemplates {
 				Main.projectileTexture[projectile.type] = _texture;
 		}
 
+		public override void SetDefaults() {
+			SetDefaultsFromInfo();
+		}
+
 		/// <summary>
 		/// Sets the default values of an <see cref="Projectile"/> by getting the values from <see cref="_info"/>
 		/// </summary>

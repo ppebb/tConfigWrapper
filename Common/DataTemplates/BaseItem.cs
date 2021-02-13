@@ -12,14 +12,18 @@ namespace tConfigWrapper.Common.DataTemplates {
 		private readonly string _name;
 		private readonly string _tooltip;
 		private readonly Texture2D _texture;
+		private readonly string _createTile;
+		private readonly string _shoot;
 
 		public BaseItem() { }
 
-		public BaseItem(ItemInfo itemInfo, string name = null, string tooltip = null, Texture2D texture = null) {
+		public BaseItem(ItemInfo itemInfo, string name = null, string createTile = null, string shoot = null, string tooltip = null, Texture2D texture = null) {
 			_info = itemInfo;
 			_name = name;
 			_tooltip = tooltip;
 			_texture = texture;
+			_createTile = createTile;
+			_shoot = shoot;
 		}
 
 		public override void SetStaticDefaults() {
@@ -35,6 +39,12 @@ namespace tConfigWrapper.Common.DataTemplates {
 
 		public override void SetDefaults() {
 			SetDefaultsFromInfo();
+
+			if (_createTile != null)
+				item.createTile = Utilities.StringToContent("TileID", "TileType", _createTile.RemoveIllegalCharacters());
+
+			if (_createTile != null)
+				item.shoot = Utilities.StringToContent("ProjectileID", "ProjectileType", _shoot.RemoveIllegalCharacters());
 		}
 
 		public override bool Autoload(ref string name) {

@@ -33,11 +33,10 @@ namespace tConfigWrapper {
 		private static ConcurrentDictionary<string, ModProjectile> projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
 		public static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 
-		private static Mod mod => ModContent.GetInstance<tConfigWrapper>();
+		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() { // Method to load everything
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
-
 			// Cringe reflection
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
 			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
@@ -341,6 +340,8 @@ namespace tConfigWrapper {
 			if (ItemID.FromLegacyName(itemName, 4) != 0)
 				internalName = itemName;
 			bool logItemAndModName = false;
+			string createTile = null;
+			string shoot = null;
 
 			foreach (IniFileSection section in iniFile.sections) {
 				foreach (IniFileElement element in section.elements) {
@@ -371,26 +372,11 @@ namespace tConfigWrapper {
 									continue;
 								}
 								case "createTileName": {
-									statField = typeof(ItemInfo).GetField("createTile");
-									var succeed = int.TryParse(splitElement[1], out var createTileID);
-									if (succeed) {
-										statField.SetValue(info, createTileID);
-										mod.Logger.Debug($"TileID {createTileID} was sucessfully parsed!");
-										logItemAndModName = true;
-									}
-									else {
-										int modTile = mod.TileType($"{modName}:{fileName}");
-										if (modTile != 0) {
-											statField.SetValue(info, modTile);
-											mod.Logger.Debug($"Mod tile {modTile} was successfully added");
-											logItemAndModName = true;
-										}
-										else {
-											mod.Logger.Debug($"TryParse & mod.TileType: Failed to parse the placeable tile! -> {splitElement[1]}");
-											logItemAndModName = true;
-										}
-									}
-
+									createTile = $"{modName}:{splitElement[1]}";
+									continue;
+								}
+								case "shoot": {
+									shoot = $"{modName}:{splitElement[1]}";
 									continue;
 								}
 								case "type":
@@ -402,7 +388,6 @@ namespace tConfigWrapper {
 										tConfigWrapper.ReportErrors = true;
 										continue;
 									}
-
 									break;
 								}
 							}
@@ -450,10 +435,9 @@ namespace tConfigWrapper {
 			}
 
 			if (itemTexture != null)
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, toolTip, itemTexture));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, toolTip, itemTexture));
 			else
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, toolTip));
-
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, toolTip));
 			reader.Dispose();
 			//}
 		}
@@ -622,11 +606,6 @@ namespace tConfigWrapper {
 							oreTile = true;
 
 						switch (converted) {
-							case "DropName":
-								splitElement[1] = splitElement[1].Replace(" ", "");
-								statField = typeof(TileInfo).GetField("drop");
-								statField.SetValue(info, mod.TileType(splitElement[1]));
-								continue;
 							case "minPick":
 							case "minAxe":
 							case "minHammer": {
@@ -658,13 +637,16 @@ namespace tConfigWrapper {
 							case "tileSolid":
 							case "tileNoAttach":
 							case "tileNoFail":
-							//else if (converted == "furniture")  {
-							//	tileStringFields.Add(converted, splitElement[1]);
-							//	continue;
-							//}
 							case "tileFrameImportant":
 								tileBoolFields.Add(converted, bool.Parse(splitElement[1]));
 								continue;
+							case "DropName":
+								tileStringFields.Add(converted, $"{modName}:{splitElement[1]}");
+								continue;
+							case "furniture":  {
+								tileStringFields.Add(converted, splitElement[1]);
+								continue;
+							}
 							case "id":
 							case "type":
 							case "mineResist" when splitElement[1] == "0":
@@ -676,7 +658,6 @@ namespace tConfigWrapper {
 									tConfigWrapper.ReportErrors = true;
 									continue;
 								}
-
 								break;
 							}
 						}
@@ -709,27 +690,39 @@ namespace tConfigWrapper {
 			loadProgress?.Invoke(0f);
 			SetupRecipes(); // Check what tiles are used in recipes so it can add a name to it
 			int iterationCount = 0;
-			foreach (var modTile in tileMapData) {
+			foreach (var (modTile, (display, name)) in tileMapData) {
 				iterationCount++;
-				loadSubProgressText?.Invoke($"{modTile.Value.Item2}");
-				Texture2D tileTex = Main.tileTexture[modTile.Key.Type];
+				loadSubProgressText?.Invoke($"{name}");
+				Texture2D tileTex = Main.tileTexture[modTile.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
-				int r = colors.Sum(x => x.R) / colors.Length;
-				int g = colors.Sum(x => x.G) / colors.Length;
-				int b = colors.Sum(x => x.B) / colors.Length;
-				var mainColor = colors.GroupBy(col => new Color(col.R, col.G, col.B))
-					.OrderByDescending(grp => grp.Count())
-					.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
-					.Select(grp => grp.Key)
-					.First();
-				if (modTile.Value.Item1) {
-					modTile.Key.AddMapEntry(mainColor, Language.GetText(modTile.Value.Item2));
-					mod.Logger.Debug($"Added translation and color for {modTile.Value.Item2}");
+				Color[,] colorsGrid = colors.To2DColor(tileTex.Width, tileTex.Height);
+				List<Color> noLineColor = new List<Color>();
+				// Iterates through the 2D array of colors but it removes 
+				for (int x = 0; x < colorsGrid.GetLength(0); x++) {
+					for (int y = 0; y < colorsGrid.GetLength(1); y++) {
+						if (colorsGrid[x, y] != new Color(151, 107, 75) && colorsGrid[x, y] != new Color(114, 81, 56) && colorsGrid[x, y] != Color.Black && x + 1 % 18 != 0 && x % 18 != 0 && y + 1 % 18 != 0 && y % 18 != 0) // Checks that the current pixel isn't a multiple of 18 or a multiple of 18 - 1. This filters out pink lines, it also checks for certain colors like black and dirt colors.
+							noLineColor.Add(colorsGrid[x, y]);
+					}
+				}
+				// Gets the average color of the List
+				int r = noLineColor.Sum(x => x.R) / noLineColor.Count;
+				int g = noLineColor.Sum(x => x.G) / noLineColor.Count;
+				int b = noLineColor.Sum(x => x.B) / noLineColor.Count;
+				var averageColor = new Color(r, g, b);
+				// Code to get the mode color
+				//var mainColor = noLineColor.GroupBy(col => new Color(col.R, col.G, col.B))
+				//	.OrderByDescending(grp => grp.Count())
+				//	.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
+				//	.Select(grp => grp.Key)
+				//	.First();
+				if (display) {
+					modTile.AddMapEntry(averageColor, Language.GetText(name));
+					mod.Logger.Debug($"Added translation and color for {name}");
 				}
 				else {
-					modTile.Key.AddMapEntry(mainColor);
-					mod.Logger.Debug($"Added color for {modTile.Value.Item2}");
+					modTile.AddMapEntry(averageColor);
+					mod.Logger.Debug($"Added color for {name}");
 				}
 				loadProgress?.Invoke(iterationCount / tileMapData.Count);
 			}
@@ -790,10 +783,31 @@ namespace tConfigWrapper {
 				}
 			}
 
+			string texturePath = Path.ChangeExtension(fileName, "png");
+			Texture2D projectileTexture = null;
+			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
+				projectileTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream);
+			}
+
 			if (logProjectileAndModName) {
 				mod.Logger.Debug($"{internalName}");
 			}
+
+			if (projectileTexture != null)
+				projectilesToLoad.TryAdd(internalName, new BaseProjectile((ProjectileInfo)info, projectileName, projectileTexture));
+			else
+				projectilesToLoad.TryAdd(internalName, new BaseProjectile((ProjectileInfo)info, projectileName));
 		}
+
+		public static void LoadStaticFields() {
+		globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
+		recipeDict = new ConcurrentDictionary<string, IniFileSection>();
+		itemsToLoad = new ConcurrentDictionary<string, ModItem>();
+		tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
+		npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
+		projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
+		tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
+	}
 
 		public static void UnloadStaticFields() {
 			files = null;
@@ -806,7 +820,6 @@ namespace tConfigWrapper {
 			tilesToLoad = null;
 			npcsToLoad = null;
 			tileMapData = null;
-
 		}
 	}
 }

@@ -23,6 +23,7 @@ namespace tConfigWrapper {
 		private UserInterface _tCFModMenu;
 
 		public override void Load() {
+			Utilities.LoadStaticFields();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;

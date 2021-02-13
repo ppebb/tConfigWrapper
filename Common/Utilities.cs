@@ -5,8 +5,14 @@ using System;
 using System.IO;
 using Terraria;
 using Terraria.ModLoader;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace tConfigWrapper.Common {
+	public class die{
+
+	}
+
 	/// <summary>
 	/// A class containing utility methods
 	/// </summary>
@@ -17,7 +23,25 @@ namespace tConfigWrapper.Common {
 		/// <param name="str"></param>
 		/// <returns></returns>
 		public static string RemoveIllegalCharacters(this String str) {
-			return str.Replace(" ", "").Replace("'", "");
+			if (str != null)
+				return str.Replace(" ", "").Replace("'", "");
+			else
+				return str;
+		}
+
+		public static void Deconstruct<T1, T2>(this KeyValuePair<T1, T2> tuple, out T1 key, out T2 value) {
+			key = tuple.Key;
+			value = tuple.Value;
+		}
+
+		public static Color[,] To2DColor(this Color[] colors, int width, int height) {
+			Color[,] grid = new Color[height, width];
+			for (int row = 0; row < height; row++) {
+				for (int column = 0; column < width; column++) {
+					grid[row, column] = colors[row * width + column];
+				}
+			}
+			return grid;
 		}
 
 		/// <summary>
@@ -122,11 +146,21 @@ namespace tConfigWrapper.Common {
 			}
 		}
 
+		internal static void LoadStaticFields() {
+			tConfigWrapper.ReportErrors = false;
+			tConfigWrapper.ModsPath = Main.SavePath + "\\tConfigWrapper\\Mods";
+			LoadStep.LoadStaticFields();
+		}
+
 		internal static void UnloadStaticFields() {
 			tConfigWrapper.ReportErrors = false;
 			tConfigWrapper.ModsPath = null;
 			LoadStep.UnloadStaticFields();
 		}
+
+		public static ConcurrentDictionary<string, object> searchDict = new ConcurrentDictionary<string, object>();
+		public static MethodInfo containsName = typeof(IdDictionary).GetMethod("ContainsName"); // Reflection allows for XContentID.Search.Method
+		public static MethodInfo getID = typeof(IdDictionary).GetMethod("GetId");
 
 		/// <summary>
 		/// Returns an int from a content string. Returns 0 if it fails.
@@ -134,28 +168,33 @@ namespace tConfigWrapper.Common {
 		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
-		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla string passing it in with {modName} in front will still work fine</param>
+		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID string passing it in with {modName} in front will still work fine.\nString should contain no illegal characters</param>
 		/// <returns></returns>
-		internal static int StringToContent(Mod mod, string contentIDType, string modContentMethod, string contentString) {
-			MethodInfo containsName = typeof(IdDictionary).GetMethod("ContainsName"); // Reflection allows for XContentID.Search.Method
-			MethodInfo getID = typeof(IdDictionary).GetMethod("GetId");
-			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(mod, new object[] { contentString.RemoveIllegalCharacters() }); // Is mod.XType
-			var search = typeof(Main).Assembly.GetType($"Terraria.ID.{contentIDType}").GetField("Search", BindingFlags.Static | BindingFlags.Public).GetValue(null);
-			bool isVanillaItem = (bool)containsName.Invoke(search, new object[] { contentString.Split(':')[1].RemoveIllegalCharacters() });
-			string removeModAndIllegal = contentString.Split(':')[1].RemoveIllegalCharacters();
-			if (!isVanillaItem && !CheckIDConversion(contentString) && contentInt == 0) { // Checks that the ID doesn't exist, can't be converted to a 1.3 ID, and isn't mod content
-				mod.Logger.Debug($"{contentIDType} {contentString} does not exist");
-				return 0;
+		internal static int StringToContent(string contentIDType, string modContentMethod, string contentString) {
+			if (contentString == null)
+				return 0; // I have to add this because yes
+			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(LoadStep.mod, new object[] { contentString }); // Is mod.XType
+			if (!searchDict.ContainsKey(contentIDType)) {
+				object search = typeof(Main).Assembly.GetType($"Terraria.ID.{contentIDType}").GetField("Search", BindingFlags.Static | BindingFlags.Public).GetValue(null);
+				searchDict.TryAdd(contentIDType, search);
 			}
-			else if (isVanillaItem) {
-				return (int)getID.Invoke(search, new object[] { removeModAndIllegal });
+			string contentStringNoMod = contentString.Split(':')[1]; // Takes something like Avalon:DarkShard which is actually vanilla and makes it vanilla
+			if (!CheckIDConversion(contentStringNoMod) && contentInt == 0 && (bool)containsName.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod }) && int.TryParse(contentStringNoMod, out int _)) { // Checks that the ID isn't a vanilla ID (1.3 or 1.1.2 variant) or an existing modded content
+				LoadStep.mod.Logger.Debug($"{contentStringNoMod} used by {contentString.Split(':')[0]} does not exist!");
+				tConfigWrapper.ReportErrors = true;
 			}
-			else if (CheckIDConversion(removeModAndIllegal)) { // Checks if contentString is a vanilla ID that can be converted to 1.3
-				removeModAndIllegal = ConvertIDTo13(removeModAndIllegal);
-				return (int)getID.Invoke(search, new object[] { removeModAndIllegal });
-			}
-			else if (contentInt != 0) { // This if check is useless but I still have it because yes
+			else if (int.TryParse(contentStringNoMod, out int result)) // Returns the parsed string if the string is just a straight number
+				return result;
+			else if (CheckIDConversion(contentStringNoMod)) // Returns the ID if it is a 1.1.2 ID that can be converted to a 1.3 ID
+				return (int)getID.Invoke(searchDict[contentIDType], new object[] { ConvertIDTo13(contentStringNoMod) });
+			else if ((bool)containsName.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod })) // Checks if the string doesn't need to be converted and is consistent with the 1.3 ID
+				return (int)getID.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod });
+			else if (contentInt != 0) // Returns if the content is modded
 				return contentInt;
+			else {
+				LoadStep.mod.Logger.Debug("How was this even triggered");
+				tConfigWrapper.ReportErrors = true;
+				return 0;
 			}
 			return 0;
 		}

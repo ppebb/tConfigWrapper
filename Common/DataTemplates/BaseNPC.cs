@@ -55,13 +55,13 @@ namespace tConfigWrapper.Common.DataTemplates {
 		}
 
 		public override void NPCLoot() {
-			foreach (var drop in _dropList) {
-				int dropInt = Utilities.StringToContent(mod, "ItemID", "ItemType", drop.Item3);
-				if (Main.rand.NextFloat() < (drop.Item4)) { // 
-					if (drop.Item2 != null)
-						Item.NewItem(npc.getRect(), dropInt, Main.rand.Next(drop.Item1, (int)drop.Item2));
+			foreach (var (min, max, item, chance) in _dropList) {
+				int dropInt = Utilities.StringToContent("ItemID", "ItemType", item);
+				if (Main.rand.NextFloat() < (chance)) { // 
+					if (max != null)
+						Item.NewItem(npc.getRect(), dropInt, Main.rand.Next(min, (int)max));
 					else
-						Item.NewItem(npc.getRect(), dropInt, drop.Item1);
+						Item.NewItem(npc.getRect(), dropInt, min);
 				}
 			}
 		}

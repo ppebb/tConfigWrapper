@@ -1,7 +1,6 @@
 ﻿using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
 using System.Reflection;
-using System;
 using Terraria;
 using Terraria.ID;
 using Terraria.ObjectData;
@@ -30,6 +29,12 @@ namespace tConfigWrapper.Common.DataTemplates {
 
 		public override void SetDefaults() {
 			SetDefaultsFromInfo();
+			if (dustType == 0 && !Name.Contains("Dirt") && !Name.Contains("dirt"))
+				dustType = -1;
+			if (soundStyle == 21 && soundType == SoundID.PlayerHit) {
+				soundStyle = 0;
+				soundType = SoundID.Tink;
+			}
 			_tileBoolFields.TryGetValue("tileFrameImportant", out bool frameImportant);
 			if (frameImportant) {
 				TileObjectData.newTile.Width = _tileNumberFields["Width"];
@@ -47,18 +52,27 @@ namespace tConfigWrapper.Common.DataTemplates {
 					mod.Logger.Debug($"Tile field {field.Key} does not exist in Main!");
 			}
 			foreach (var field in _tileStringFields) {
-				if (field.Key == "furniture") {
+				if (field.Key == "furniture" && field.Key != "DropName") {
 					string ech = char.ToUpper(field.Value[0]) + field.Value.Substring(1);
 					FieldInfo statField = typeof(TileID.Sets.RoomNeeds).GetField($"CountsAs{ech}");
 					int[] needsArray = (int[])statField.GetValue(null);
 					AddToArray(ref needsArray);
 					statField.SetValue(null, needsArray);
 				}
+				else if (field.Key == "DropName" && field.Value != null)
+					drop = Utilities.StringToContent("ItemID", "ItemType", field.Value.RemoveIllegalCharacters());
 			}
 		}
 
 		public override void PostSetDefaults() {
 			Main.tileTexture[Type] = _texture;
+			mod.Logger.Debug("===============================");
+			mod.Logger.Debug($"Fields of tile {Name}:");
+			var fields = typeof(TileInfo).GetFields();
+			foreach (FieldInfo field in fields) {
+				if (field != null)
+					mod.Logger.Debug($"{field.Name}:{field.GetValue(_info) ?? "null"}");
+			}
 		}
 
 		public override bool Autoload(ref string name, ref string texture) {
