@@ -4,7 +4,7 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 ### Progress
 ```diff
 # Done:
-? Your mom
++ Your mom
 
 # Doing:
 ! Ini loading of npcs
