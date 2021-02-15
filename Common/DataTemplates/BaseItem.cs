@@ -14,15 +14,17 @@ namespace tConfigWrapper.Common.DataTemplates {
 		private readonly Texture2D _texture;
 		private readonly string _createTile;
 		private readonly string _shoot;
+		private readonly string _createWall;
 
 		public BaseItem() { }
 
-		public BaseItem(ItemInfo itemInfo, string name = null, string createTile = null, string shoot = null, string tooltip = null, Texture2D texture = null) {
+		public BaseItem(ItemInfo itemInfo, string name = null, string createTile = null, string shoot = null, string createWall = null, string tooltip = null, Texture2D texture = null) {
 			_info = itemInfo;
 			_name = name;
 			_tooltip = tooltip;
 			_texture = texture;
 			_createTile = createTile;
+			_createWall = createWall;
 			_shoot = shoot;
 		}
 
@@ -45,6 +47,9 @@ namespace tConfigWrapper.Common.DataTemplates {
 
 			if (_createTile != null)
 				item.shoot = Utilities.StringToContent("ProjectileID", "ProjectileType", _shoot.RemoveIllegalCharacters());
+
+			if (_createWall != null)
+				item.createWall = Utilities.StringToContent("WallID", "WallType", _createWall.RemoveIllegalCharacters());
 		}
 
 		public override bool Autoload(ref string name) {

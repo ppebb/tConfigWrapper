@@ -43,7 +43,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void PostSetupContent() {
-			LoadStep.GetTileMapEntries();
+			LoadStep.GetMapEntries();
 		}
 
 		public override void PostAddRecipes() {

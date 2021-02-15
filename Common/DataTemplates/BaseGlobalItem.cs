@@ -23,6 +23,9 @@ namespace tConfigWrapper.Common.DataTemplates {
 				if (infoFieldValue != null)
 					itemField.SetValue(item, infoFieldValue);
 			}
+
+			if (item.maxStack == 250) // So that anything that had the 1.1.2 max stack will be set for 1.3. Should also prevent mods from reducing existing content stacks from 1.3.
+				item.maxStack = 999;
 		}
 	}
 }

@@ -66,13 +66,6 @@ namespace tConfigWrapper.Common.DataTemplates {
 
 		public override void PostSetDefaults() {
 			Main.tileTexture[Type] = _texture;
-			mod.Logger.Debug("===============================");
-			mod.Logger.Debug($"Fields of tile {Name}:");
-			var fields = typeof(TileInfo).GetFields();
-			foreach (FieldInfo field in fields) {
-				if (field != null)
-					mod.Logger.Debug($"{field.Name}:{field.GetValue(_info) ?? "null"}");
-			}
 		}
 
 		public override bool Autoload(ref string name, ref string texture) {

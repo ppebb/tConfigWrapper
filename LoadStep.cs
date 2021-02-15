@@ -31,6 +31,7 @@ namespace tConfigWrapper {
 		private static ConcurrentDictionary<string, (ModTile tile, string texture)> tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
 		private static ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
 		private static ConcurrentDictionary<string, ModProjectile> projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
+		private static ConcurrentDictionary<string, (ModWall wall, string texture)> wallsToLoad = new ConcurrentDictionary<string, (ModWall, string)>();
 		public static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 
 		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
@@ -77,15 +78,18 @@ namespace tConfigWrapper {
 						tilesToLoad.Clear();
 						npcsToLoad.Clear();
 						projectilesToLoad.Clear();
+						wallsToLoad.Clear();
+						tileMapData.Clear();
 						taskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
 						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> npcFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\NPC\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\") && Path.GetExtension(name) == ".ini");
-						IEnumerable<string> projectileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Projectile\\") && Path.GetExtension(name) == "ini.");
+						IEnumerable<string> projectileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Projectile\\") && Path.GetExtension(name) == ".ini");
+						IEnumerable<string> wallFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Wall\\") && Path.GetExtension(name) == ".ini");
 
-						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count() + projectileFiles.Count(); // Count all content in mod for accurate loading progress
+						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count() + projectileFiles.Count() + wallFiles.Count(); // Count all loadable content in mod for accurate loading progress
 
 						if (contentCount != 0)
 						{
@@ -103,6 +107,10 @@ namespace tConfigWrapper {
 
 							Thread projectileThread = new Thread(CreateProjectile);
 							projectileThread.Start(new object[] { projectileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							finished.AddCount();
+
+							Thread wallThread = new Thread(CreateWall);
+							wallThread.Start(new object[] { wallFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							finished.Signal();
@@ -128,6 +136,10 @@ namespace tConfigWrapper {
 
 						foreach (var projectile in projectilesToLoad) {
 							mod.AddProjectile(projectile.Key, projectile.Value);
+						}
+
+						foreach (var wall in wallsToLoad) {
+							mod.AddWall(wall.Key, wall.Value.wall, wall.Value.texture);
 						}
 					}
 				}
@@ -340,6 +352,7 @@ namespace tConfigWrapper {
 			if (ItemID.FromLegacyName(itemName, 4) != 0)
 				internalName = itemName;
 			bool logItemAndModName = false;
+			string createWall = null;
 			string createTile = null;
 			string shoot = null;
 
@@ -375,8 +388,12 @@ namespace tConfigWrapper {
 									createTile = $"{modName}:{splitElement[1]}";
 									continue;
 								}
-								case "shoot": {
+								case "projectile": {
 									shoot = $"{modName}:{splitElement[1]}";
+									continue;
+								}
+								case "createWallName": {
+									createWall = $"{modName}:{splitElement[1]}";
 									continue;
 								}
 								case "type":
@@ -435,9 +452,9 @@ namespace tConfigWrapper {
 			}
 
 			if (itemTexture != null)
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, toolTip, itemTexture));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, createWall, toolTip, itemTexture));
 			else
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, toolTip));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, createWall, toolTip));
 			reader.Dispose();
 			//}
 		}
@@ -525,7 +542,6 @@ namespace tConfigWrapper {
 							break;
 						}
 						case "Drops":
-
 							// example of drop string: 1-4 Golden Flame=0.7
 							string dropRangeString = element.Content.Split(new[] { ' ' }, 2)[0]; // This gets the drop range, everthing before the first space
 							string dropItemString = element.Content.Split(new[] { ' ' }, 2)[1].Split('=')[0]; // This gets everything after the first space, then it splits at the = and gets everything before it
@@ -685,47 +701,89 @@ namespace tConfigWrapper {
 				mod.Logger.Debug($"{internalName}"); //Logs the tile and mod name if "Field not found or invalid field". Mod and tile name show up below the other log lines
 		}
 
-		public static void GetTileMapEntries() { // Loads tile map entries :\
+		private static int mapIterationCount;
+		public static void GetMapEntries() { // Loads tile map entries
+			mapIterationCount = 0;
 			loadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
 			loadProgress?.Invoke(0f);
 			SetupRecipes(); // Check what tiles are used in recipes so it can add a name to it
-			int iterationCount = 0;
+			int mapContentCount = tileMapData.Count + wallsToLoad.Count;
+
+			using (CountdownEvent finished = new CountdownEvent(1)) {
+				if (mapContentCount != 0) {
+					Thread tileMapEntryThread = new Thread(GetTileMapEntries);
+					tileMapEntryThread.Start(finished);
+					finished.AddCount();
+
+					Thread wallMapEntryThread = new Thread(GetWallMapEntries);
+					wallMapEntryThread.Start(finished);
+					finished.AddCount();
+
+					finished.Signal();
+					finished.Wait();
+				}
+			}
+		}
+
+		private static void GetTileMapEntries(object stateInfo) {
+			CountdownEvent countdown = (CountdownEvent)stateInfo;
+
 			foreach (var (modTile, (display, name)) in tileMapData) {
-				iterationCount++;
-				loadSubProgressText?.Invoke($"{name}");
+				mapIterationCount++;
+				loadSubProgressText?.Invoke(name);
 				Texture2D tileTex = Main.tileTexture[modTile.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
 				Color[,] colorsGrid = colors.To2DColor(tileTex.Width, tileTex.Height);
 				List<Color> noLineColor = new List<Color>();
-				// Iterates through the 2D array of colors but it removes 
+				//Iterates through the 2D array of colors but it removes unwanted pixels.
 				for (int x = 0; x < colorsGrid.GetLength(0); x++) {
-					for (int y = 0; y < colorsGrid.GetLength(1); y++) {
-						if (colorsGrid[x, y] != new Color(151, 107, 75) && colorsGrid[x, y] != new Color(114, 81, 56) && colorsGrid[x, y] != Color.Black && x + 1 % 18 != 0 && x % 18 != 0 && y + 1 % 18 != 0 && y % 18 != 0) // Checks that the current pixel isn't a multiple of 18 or a multiple of 18 - 1. This filters out pink lines, it also checks for certain colors like black and dirt colors.
+					for (int y = 0; y < colorsGrid.GetLength(1); x++) {
+						if (colorsGrid[x, y] != new Color(151, 107, 75) && colorsGrid[x, y] != new Color(114, 81, 56) && colorsGrid[x, y] != Color.Black && colorsGrid[x, y].A != 0 && (x + 1) % 18 > 1 && (y + 1) % 18 > 1)
 							noLineColor.Add(colorsGrid[x, y]);
 					}
 				}
-				// Gets the average color of the List
 				int r = noLineColor.Sum(x => x.R) / noLineColor.Count;
 				int g = noLineColor.Sum(x => x.G) / noLineColor.Count;
 				int b = noLineColor.Sum(x => x.B) / noLineColor.Count;
-				var averageColor = new Color(r, g, b);
-				// Code to get the mode color
-				//var mainColor = noLineColor.GroupBy(col => new Color(col.R, col.G, col.B))
-				//	.OrderByDescending(grp => grp.Count())
-				//	.Where(grp => grp.Key.R != 0 || grp.Key.G != 0 || grp.Key.B != 0)
-				//	.Select(grp => grp.Key)
-				//	.First();
-				if (display) {
+				Color averageColor = new Color(r, g, b);
+
+				if (display)
 					modTile.AddMapEntry(averageColor, Language.GetText(name));
-					mod.Logger.Debug($"Added translation and color for {name}");
-				}
-				else {
+				else
 					modTile.AddMapEntry(averageColor);
-					mod.Logger.Debug($"Added color for {name}");
-				}
-				loadProgress?.Invoke(iterationCount / tileMapData.Count);
+
+				loadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
 			}
+			countdown.Signal();
+		}
+
+		private static void GetWallMapEntries(object stateInfo) {
+			CountdownEvent countdown = (CountdownEvent)stateInfo;
+
+			foreach (var (wallName, (modWall, texture)) in wallsToLoad) {
+				mapIterationCount++;
+				loadSubProgressText?.Invoke(wallName);
+				Texture2D wallTex = Main.wallTexture[modWall.Type];
+				Color[] colors = new Color[wallTex.Width * wallTex.Height];
+				wallTex.GetData(colors);
+				Color[,] colorsGrid = colors.To2DColor(wallTex.Width, wallTex.Height);
+				List<Color> noLineColor = new List<Color>();
+				for (int x = 0; x < colorsGrid.GetLength(0); x++) {
+					for (int y = 0; y < colorsGrid.GetLength(1); y++) {
+						if (colorsGrid[x, y].A != 0 && (x + 3) % 36 > 3 && (y + 3) % 36 > 3)
+							noLineColor.Add(colorsGrid[x, y]);
+					}
+				}
+				int r = noLineColor.Sum(x => x.R) / noLineColor.Count;
+				int g = noLineColor.Sum(x => x.G) / noLineColor.Count;
+				int b = noLineColor.Sum(x => x.B) / noLineColor.Count;
+				Color averageColor = new Color(r, g, b);
+
+				modWall.AddMapEntry(averageColor);
+				loadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
+			}
+			countdown.Signal();
 		}
 
 		private static void CreateProjectile(object stateInfo) { // This is literally for easier multithreading again
@@ -799,15 +857,72 @@ namespace tConfigWrapper {
 				projectilesToLoad.TryAdd(internalName, new BaseProjectile((ProjectileInfo)info, projectileName));
 		}
 
+		private static void CreateWall(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countDown = (CountdownEvent)parameters[3];
+
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				CreateWall(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
+			countDown.Signal();
+		}
+
+		private static void CreateWall(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+			MemoryStream iniStream = streams[fileName];
+
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
+
+			string internalName = $"{modName}:{Path.GetFileNameWithoutExtension(fileName).RemoveIllegalCharacters()}";
+			string dropItem = null;
+			string house = null;
+
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					var splitElement = element.Content.Split('=');
+					
+					switch (splitElement[0]) {
+						case "id":
+						case "Blend": {
+							if (int.Parse(splitElement[1]) != -1)
+								mod.Logger.Debug($"{internalName}.{splitElement[0]} was not -1!");
+							continue;
+						}
+						case "DropName": {
+							dropItem = $"{modName}:{splitElement[1]}";
+							continue;
+						}
+						case "House": {
+							house = splitElement[1];
+							continue;
+						}
+					}
+				}
+			}
+
+			string texturePath = Path.ChangeExtension(fileName, "png");
+			Texture2D wallTexture = null;
+			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
+				wallTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream);
+			}
+			
+			if (wallTexture != null)
+				mod.AddWall(internalName, new BaseWall(dropItem, house, wallTexture), "tConfigWrapper/Common/DataTemplates/MissingTexture");
+		}
+
 		public static void LoadStaticFields() {
-		globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
-		recipeDict = new ConcurrentDictionary<string, IniFileSection>();
-		itemsToLoad = new ConcurrentDictionary<string, ModItem>();
-		tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
-		npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
-		projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
-		tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
-	}
+			globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
+			recipeDict = new ConcurrentDictionary<string, IniFileSection>();
+			itemsToLoad = new ConcurrentDictionary<string, ModItem>();
+			tilesToLoad = new ConcurrentDictionary<string, (ModTile, string)>();
+			npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
+			projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
+			wallsToLoad = new ConcurrentDictionary<string, (ModWall, string)>();
+			tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
+		}
 
 		public static void UnloadStaticFields() {
 			files = null;
@@ -819,6 +934,7 @@ namespace tConfigWrapper {
 			itemsToLoad = null;
 			tilesToLoad = null;
 			npcsToLoad = null;
+			wallsToLoad = null;
 			tileMapData = null;
 		}
 	}
