@@ -24,8 +24,8 @@ namespace tConfigWrapper.Common.DataTemplates {
 			if (_name != null)
 				DisplayName.SetDefault(_name);
 
-			if (_texture != null)
-				Main.projectileTexture[projectile.type] = _texture;
+			//if (_texture != null)
+			//	Main.projectileTexture[projectile.type] = _texture;
 		}
 
 		public override void SetDefaults() {

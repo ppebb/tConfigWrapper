@@ -79,7 +79,7 @@ namespace tConfigWrapper {
 						npcsToLoad.Clear();
 						projectilesToLoad.Clear();
 						wallsToLoad.Clear();
-						tileMapData.Clear();
+						//tileMapData.Clear();
 						taskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
@@ -738,7 +738,7 @@ namespace tConfigWrapper {
 				List<Color> noLineColor = new List<Color>();
 				//Iterates through the 2D array of colors but it removes unwanted pixels.
 				for (int x = 0; x < colorsGrid.GetLength(0); x++) {
-					for (int y = 0; y < colorsGrid.GetLength(1); x++) {
+					for (int y = 0; y < colorsGrid.GetLength(1); y++) {
 						if (colorsGrid[x, y] != new Color(151, 107, 75) && colorsGrid[x, y] != new Color(114, 81, 56) && colorsGrid[x, y] != Color.Black && colorsGrid[x, y].A != 0 && (x + 1) % 18 > 1 && (y + 1) % 18 > 1)
 							noLineColor.Add(colorsGrid[x, y]);
 					}
