@@ -24,6 +24,10 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 - dll loading
 - Script loading
 ```
+[![forthebadge](https://forthebadge.com/images/badges/0-percent-optimized.svg)](https://forthebadge.com)
+[![forthebadge](https://forthebadge.com/images/badges/as-seen-on-tv.svg)](https://forthebadge.com)
+[![forthebadge](https://forthebadge.com/images/badges/you-didnt-ask-for-this.svg)](https://forthebadge.com)
+
 If you'd like to help feel free to join my discord server and contact me.
 <br />
 <p align="center" >
