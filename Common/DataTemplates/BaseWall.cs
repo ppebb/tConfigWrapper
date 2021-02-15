@@ -23,11 +23,13 @@ namespace tConfigWrapper.Common.DataTemplates {
 		}
 
 		public override void SetDefaults() {
+			dustType = -1;
+
 			if (_texture != null)
 				Main.wallTexture[Type] = _texture;
 
 			if (_drop != null)
-				drop = Utilities.StringToContent("WallID", "WallType", _drop);
+				drop = Utilities.StringToContent("ItemID", "ItemType", _drop);
 
 			if (_house != null)
 				Main.wallHouse[Type] = bool.Parse(_house);

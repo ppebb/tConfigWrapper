@@ -168,7 +168,7 @@ namespace tConfigWrapper.Common {
 		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
-		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID string passing it in with {modName} in front will still work fine.\nString should contain no illegal characters</param>
+		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID string passing it in with {modName} in front will still work fine. String should contain no illegal characters</param>
 		/// <returns></returns>
 		internal static int StringToContent(string contentIDType, string modContentMethod, string contentString) {
 			if (contentString == null)

@@ -23,13 +23,19 @@ namespace tConfigWrapper.Common.DataTemplates {
 		public override void SetStaticDefaults() {
 			if (_name != null)
 				DisplayName.SetDefault(_name);
+		}
 
-			//if (_texture != null)
-			//	Main.projectileTexture[projectile.type] = _texture;
+		public override void AutoStaticDefaults() {
+			if (_texture != null)
+				Main.projectileTexture[projectile.type] = _texture;
 		}
 
 		public override void SetDefaults() {
 			SetDefaultsFromInfo();
+		}
+
+		public override bool Autoload(ref string name) {
+			return false;
 		}
 
 		/// <summary>

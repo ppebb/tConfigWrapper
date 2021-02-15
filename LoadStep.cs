@@ -79,7 +79,6 @@ namespace tConfigWrapper {
 						npcsToLoad.Clear();
 						projectilesToLoad.Clear();
 						wallsToLoad.Clear();
-						//tileMapData.Clear();
 						taskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
@@ -820,6 +819,9 @@ namespace tConfigWrapper {
 							var statField = typeof(ProjectileInfo).GetField(splitElement[0]);
 
 							switch (splitElement[0]) {
+								case "type": {
+									continue;
+								}
 								default: {
 									if (statField == null) {
 										mod.Logger.Debug($"Projectile field not found or invalid field! -> {splitElement[0]}");
@@ -892,7 +894,7 @@ namespace tConfigWrapper {
 							continue;
 						}
 						case "DropName": {
-							dropItem = $"{modName}:{splitElement[1]}";
+							dropItem = $"{modName}:{splitElement[1].RemoveIllegalCharacters()}";
 							continue;
 						}
 						case "House": {
@@ -908,9 +910,9 @@ namespace tConfigWrapper {
 			if (!Main.dedServ && streams.TryGetValue(texturePath, out MemoryStream textureStream)) {
 				wallTexture = Texture2D.FromStream(Main.instance.GraphicsDevice, textureStream);
 			}
-			
+
 			if (wallTexture != null)
-				mod.AddWall(internalName, new BaseWall(dropItem, house, wallTexture), "tConfigWrapper/Common/DataTemplates/MissingTexture");
+				wallsToLoad.TryAdd(internalName, (new BaseWall(dropItem, house, wallTexture), "tConfigWrapper/Common/DataTemplates/MissingTexture"));
 		}
 
 		public static void LoadStaticFields() {
