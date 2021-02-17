@@ -27,6 +27,7 @@ namespace tConfigWrapper {
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;
+			On.Terraria.Item.AffixName += Item_AffixName;
 			tCFModMenu = new TConfigModMenu();
 			tCFModMenu.Activate();
 			_tCFModMenu = new UserInterface();
@@ -162,6 +163,17 @@ namespace tConfigWrapper {
 				Main.MenuUI.SetState(tCFModMenu);
 				Main.menuMode = 888;
 			}, selectedMenu, buttonNames, ref buttonIndex, ref numButtons);
+		}
+
+		private string Item_AffixName(On.Terraria.Item.orig_AffixName orig, Item self) {
+			foreach (var prefix in LoadStep.suffixes) {
+				if (self.prefix == ModContent.GetInstance<tConfigWrapper>().PrefixType(prefix.Name)) {
+					string suffixed = self.Name.Replace($"{prefix.DisplayName.GetDefault()} ", "") + $" {prefix.DisplayName.GetDefault()}";
+					return suffixed;
+				}
+				continue;
+			}
+			return orig(self);
 		}
 	}
 }
