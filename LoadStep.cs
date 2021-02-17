@@ -32,11 +32,16 @@ namespace tConfigWrapper {
 		private static ConcurrentDictionary<string, ModNPC> npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
 		private static ConcurrentDictionary<string, ModProjectile> projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
 		private static ConcurrentDictionary<string, (ModWall wall, string texture)> wallsToLoad = new ConcurrentDictionary<string, (ModWall, string)>();
-		public static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
+		private static ConcurrentDictionary<string, ModPrefix> prefixesToLoad = new ConcurrentDictionary<string, ModPrefix>();
+		internal static ConcurrentBag<ModPrefix> suffixes = new ConcurrentBag<ModPrefix>();
+		internal static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 
 		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() { // Method to load everything
+			var a = typeof(ModPrefix).GetFields(BindingFlags.Instance | BindingFlags.Public);
+			mod.Logger.Debug(string.Join("\n", a.Select(x => $"{x.Name} - {x.FieldType}")));
+
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
 			// Cringe reflection
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
@@ -79,6 +84,7 @@ namespace tConfigWrapper {
 						npcsToLoad.Clear();
 						projectilesToLoad.Clear();
 						wallsToLoad.Clear();
+						prefixesToLoad.Clear();
 						taskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
@@ -87,8 +93,9 @@ namespace tConfigWrapper {
 						IEnumerable<string> tileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Tile\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> projectileFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Projectile\\") && Path.GetExtension(name) == ".ini");
 						IEnumerable<string> wallFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Wall\\") && Path.GetExtension(name) == ".ini");
+						IEnumerable<string> prefixFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Prefix\\") && Path.GetExtension(name) == ".ini");
 
-						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count() + projectileFiles.Count() + wallFiles.Count(); // Count all loadable content in mod for accurate loading progress
+						int contentCount = itemFiles.Count() + npcFiles.Count() + tileFiles.Count() + projectileFiles.Count() + wallFiles.Count() + prefixFiles.Count(); // Count all loadable content in mod for accurate loading progress
 
 						if (contentCount != 0)
 						{
@@ -110,6 +117,10 @@ namespace tConfigWrapper {
 
 							Thread wallThread = new Thread(CreateWall);
 							wallThread.Start(new object[] { wallFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							finished.AddCount();
+
+							Thread prefixThread = new Thread(CreatePrefix);
+							prefixThread.Start(new object[] { prefixFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							finished.Signal();
@@ -139,6 +150,10 @@ namespace tConfigWrapper {
 
 						foreach (var wall in wallsToLoad) {
 							mod.AddWall(wall.Key, wall.Value.wall, wall.Value.texture);
+						}
+
+						foreach (var prefix in prefixesToLoad) {
+							mod.AddPrefix(prefix.Key, prefix.Value);
 						}
 					}
 				}
@@ -915,7 +930,88 @@ namespace tConfigWrapper {
 				wallsToLoad.TryAdd(internalName, (new BaseWall(dropItem, house, wallTexture), "tConfigWrapper/Common/DataTemplates/MissingTexture"));
 		}
 
-		public static void LoadStaticFields() {
+		private static void CreatePrefix(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent countDown = (CountdownEvent)parameters[3];
+
+			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
+				loadSubProgressText?.Invoke(fileName);
+				CreatePrefix(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
+				taskCompletedCount++;
+				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+			}
+			countDown.Signal();
+		}
+
+		private static void CreatePrefix(string fileName, string modName, string extractPath, ConcurrentDictionary<string, MemoryStream> streams) {
+			MemoryStream iniStream = streams[fileName];
+			Dictionary<string, string> itemFields = new Dictionary<string, string>();
+			Dictionary<string, string> playerFields = new Dictionary<string, string>();
+
+			IniFileReader reader = new IniFileReader(iniStream);
+			IniFile iniFile = IniFile.FromStream(reader);
+
+			string internalName = $"{modName}:{Path.GetFileNameWithoutExtension(fileName).RemoveIllegalCharacters()}";
+			bool addToSuffixBag = false;
+			string name = null;
+			string requirementType = null;
+			string weight = null;
+
+			foreach (IniFileSection section in iniFile.sections) {
+				foreach (IniFileElement element in section.elements) {
+					var splitElement = element.Content.Split('=');
+
+					switch (section.Name) {
+						case "Stats": {
+							switch (splitElement[0]) {
+								case "name": {
+									name = splitElement[1];
+									continue;
+								}
+								case "suffix" when splitElement[1] == "True": {
+									addToSuffixBag = true;
+									continue;
+								}
+								case "weight": {
+									weight = splitElement[1];
+									continue;
+								}
+							}
+							break;
+						}
+						case "Requirements": {
+							switch (splitElement[0]) {
+								case "melee" when splitElement[1] == "True":
+								case "ranged" when splitElement[1] == "True":
+								case "magic" when splitElement[1] == "True":
+								case "accessory" when splitElement[1] == "True": {
+									requirementType = splitElement[0];
+									continue;
+								}
+							}
+							continue;
+						}
+						case "Item": {
+							itemFields.Add(splitElement[0], splitElement[1]);
+							continue;
+						}
+						case "Player": {
+							playerFields.Add(splitElement[0], splitElement[1]);
+							continue;
+						}
+					}
+				}
+			}
+
+			BasePrefix prefix = new BasePrefix(name, requirementType, float.Parse(weight ?? "1"), itemFields, playerFields);
+
+			prefixesToLoad.TryAdd(internalName, prefix);
+			if (addToSuffixBag) {
+				suffixes.Add(prefix);
+			}
+		}
+
+		internal static void LoadStaticFields() {
 			globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 			recipeDict = new ConcurrentDictionary<string, IniFileSection>();
 			itemsToLoad = new ConcurrentDictionary<string, ModItem>();
@@ -923,10 +1019,12 @@ namespace tConfigWrapper {
 			npcsToLoad = new ConcurrentDictionary<string, ModNPC>();
 			projectilesToLoad = new ConcurrentDictionary<string, ModProjectile>();
 			wallsToLoad = new ConcurrentDictionary<string, (ModWall, string)>();
+			prefixesToLoad = new ConcurrentDictionary<string, ModPrefix>();
+			suffixes = new ConcurrentBag<ModPrefix>();
 			tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 		}
 
-		public static void UnloadStaticFields() {
+		internal static void UnloadStaticFields() {
 			files = null;
 			loadProgressText = null;
 			loadProgress = null; 
@@ -937,6 +1035,8 @@ namespace tConfigWrapper {
 			tilesToLoad = null;
 			npcsToLoad = null;
 			wallsToLoad = null;
+			prefixesToLoad = null;
+			suffixes = null;
 			tileMapData = null;
 		}
 	}

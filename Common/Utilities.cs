@@ -93,6 +93,10 @@ namespace tConfigWrapper.Common {
 					return "tileSolid";
 				case "NoAttach":
 					return "tileNoAttach";
+				case "manaCost":
+					return "mana";
+				case "knockback":
+					return "knockBack";
 				default:
 					return fieldName;
 			}
@@ -149,12 +153,18 @@ namespace tConfigWrapper.Common {
 		internal static void LoadStaticFields() {
 			tConfigWrapper.ReportErrors = false;
 			tConfigWrapper.ModsPath = Main.SavePath + "\\tConfigWrapper\\Mods";
+			searchDict = new ConcurrentDictionary<string, object>();
+			containsName = typeof(IdDictionary).GetMethod("ContainsName");
+			getID = typeof(IdDictionary).GetMethod("GetId");
 			LoadStep.LoadStaticFields();
 		}
 
 		internal static void UnloadStaticFields() {
 			tConfigWrapper.ReportErrors = false;
 			tConfigWrapper.ModsPath = null;
+			searchDict = null;
+			containsName = null;
+			getID = null;
 			LoadStep.UnloadStaticFields();
 		}
 
@@ -168,7 +178,7 @@ namespace tConfigWrapper.Common {
 		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
-		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID string passing it in with {modName} in front will still work fine. String should contain no illegal characters</param>
+		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID number passing it in with {modName} in front will still work fine. String should contain no illegal characters</param>
 		/// <returns></returns>
 		internal static int StringToContent(string contentIDType, string modContentMethod, string contentString) {
 			if (contentString == null)
@@ -187,7 +197,7 @@ namespace tConfigWrapper.Common {
 				return result;
 			else if (CheckIDConversion(contentStringNoMod)) // Returns the ID if it is a 1.1.2 ID that can be converted to a 1.3 ID
 				return (int)getID.Invoke(searchDict[contentIDType], new object[] { ConvertIDTo13(contentStringNoMod) });
-			else if ((bool)containsName.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod })) // Checks if the string doesn't need to be converted and is consistent with the 1.3 ID
+			else if ((bool)containsName.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod }) && contentIDType == "TileID") // Checks if the string doesn't need to be converted and is consistent with the 1.3 ID. Only runs for tiles since those can use the name of the tile.
 				return (int)getID.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod });
 			else if (contentInt != 0) // Returns if the content is modded
 				return contentInt;
