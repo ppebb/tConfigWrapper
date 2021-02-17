@@ -39,9 +39,6 @@ namespace tConfigWrapper {
 		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() { // Method to load everything
-			var a = typeof(ModPrefix).GetFields(BindingFlags.Instance | BindingFlags.Public);
-			mod.Logger.Debug(string.Join("\n", a.Select(x => $"{x.Name} - {x.FieldType}")));
-
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
 			// Cringe reflection
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
