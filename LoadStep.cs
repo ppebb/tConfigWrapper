@@ -80,6 +80,14 @@ namespace tConfigWrapper {
 
 						LoadAssembly.Yes(files[i]);
 
+						// Get the first stream that is an obj file
+						var obj = streams.First(s => s.Key.EndsWith(".obj"));
+						BinaryReader reader = new BinaryReader(obj.Value);
+
+						// Create an Obj Loader and load the obj
+						var loader = new ObjLoader(reader, Path.GetFileNameWithoutExtension(files[i]));
+						loader.LoadObj();
+
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
 						itemsToLoad.Clear();
 						tilesToLoad.Clear();
