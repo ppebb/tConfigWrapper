@@ -24,6 +24,7 @@ namespace tConfigWrapper {
 		public override void Load() {
 			Utilities.LoadStaticFields();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
+			LoadMethods();
 			tCFModMenu = new TConfigModMenu();
 			tCFModMenu.Activate();
 			_tCFModMenu = new UserInterface();

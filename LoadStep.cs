@@ -35,6 +35,7 @@ namespace tConfigWrapper {
 		private static ConcurrentDictionary<string, ModPrefix> prefixesToLoad = new ConcurrentDictionary<string, ModPrefix>();
 		internal static ConcurrentBag<ModPrefix> suffixes = new ConcurrentBag<ModPrefix>();
 		internal static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
+		internal static ConcurrentDictionary<string, MemoryStream> streamsGlobal = new ConcurrentDictionary<string, MemoryStream>();
 
 		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
@@ -74,6 +75,10 @@ namespace tConfigWrapper {
 
 						ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
 						DecompressMod(files[i], extractor, streams); // Decompresses mods since .obj files are literally just 7z files
+						streamsGlobal.Clear();
+						streamsGlobal = streams;
+
+						LoadAssembly.Yes(files[i]);
 
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
 						itemsToLoad.Clear();
