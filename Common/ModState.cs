@@ -52,10 +52,9 @@ namespace tConfigWrapper.Common {
 
 		public static void DeserializeEnabledMods() {
 			if (File.Exists(tConfigWrapper.ModsPath + "\\enabled.json"))
-				EnabledMods = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(tConfigWrapper.ModsPath + "\\enabled.json"));
+				 EnabledMods = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(tConfigWrapper.ModsPath + "\\enabled.json"));
 			else
 				File.Create(tConfigWrapper.ModsPath + "\\enabled.json");
-
 		}
 	}
 

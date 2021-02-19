@@ -20,8 +20,8 @@ namespace tConfigWrapper {
 				drawLogFailMessageTimer++;
 				Main.spriteBatch.DrawString(Main.fontMouseText, "Failed to upload logs\nClick here to try again", new Vector2(25, 10), Color.Cyan);
 				Vector2 stringPixelSize = Main.fontMouseText.MeasureString("Failed to upload logs\nClick here to try again");
-				Rectangle die = new Rectangle(25, 10, (int)stringPixelSize.X, (int)stringPixelSize.Y);
-				if (die.Contains(Main.MouseScreen.ToPoint()) && Main.mouseLeft) {
+				Rectangle rect = new Rectangle(25, 10, (int)stringPixelSize.X, (int)stringPixelSize.Y);
+				if (rect.Contains(Main.MouseScreen.ToPoint()) && Main.mouseLeft) {
 					UploadLogs(0);
 					FailedToSendLogs = false;
 				}

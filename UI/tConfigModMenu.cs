@@ -8,10 +8,10 @@ using Terraria;
 using Terraria.UI;
 
 namespace tConfigWrapper.UI {
-	public class TConfigModMenu : UIState {
+	public class tConfigModMenu : UIState {
 		public override void OnInitialize() {
 			for (int i = 0; i < ModState.AllMods.Count; i++) {
-				SwitchModStateButton switchButton = new SwitchModStateButton(ModState.AllMods[i], new Vector2(250, 10 + (i * 20)));
+				SwitchModStateButton switchButton = new SwitchModStateButton(ModState.AllMods[i], new Vector2(300, 10 + (i * 20)), 10 + (i * 20), 300);
 				Append(switchButton);
 			}
 		}
@@ -19,7 +19,6 @@ namespace tConfigWrapper.UI {
 		public override void Update(GameTime gameTime) {
 			if (Main.keyState.IsKeyDown(Keys.Escape))
 				Main.menuMode = 0;
-
 			base.Update(gameTime);
 		}
 
@@ -28,6 +27,7 @@ namespace tConfigWrapper.UI {
 				string fileWithoutExt = Path.GetFileNameWithoutExtension(ModState.AllMods[i]);
 				spriteBatch.DrawString(Main.fontMouseText, fileWithoutExt, new Vector2(50, 10 + (i * 20)), Color.Cyan);
 			}
+			base.Draw(spriteBatch);
 		}
 	}
 }

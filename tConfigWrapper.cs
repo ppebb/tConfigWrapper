@@ -19,16 +19,16 @@ namespace tConfigWrapper {
 		public static bool ReportErrors = false;
 		public static bool FailedToSendLogs = false;
 
-		internal TConfigModMenu tCFModMenu;
+		internal tConfigModMenu tCFModMenu;
 		private UserInterface _tCFModMenu;
 
 		public override void Load() {
+			Utilities.LoadStaticFields();
 			ModState.GetAllMods();
 			ModState.DeserializeEnabledMods();
-			Utilities.LoadStaticFields();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			LoadMethods();
-			tCFModMenu = new TConfigModMenu();
+			tCFModMenu = new tConfigModMenu();
 			tCFModMenu.Activate();
 			_tCFModMenu = new UserInterface();
 			_tCFModMenu.SetState(tCFModMenu);
