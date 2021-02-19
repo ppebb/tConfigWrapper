@@ -1,11 +1,9 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ReLogic.Graphics;
-using System.IO;
 using tConfigWrapper.Common;
 using Terraria.UI;
 using Terraria;
-using Terraria.ModLoader;
 
 namespace tConfigWrapper.UI {
 	public class SwitchModStateButton : UIElement {

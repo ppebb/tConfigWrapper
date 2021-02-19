@@ -67,9 +67,6 @@ namespace tConfigWrapper {
 				string currentMod = ModState.EnabledMods[i];
 				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
 
-				if (!ModState.EnabledMods.Contains(currentModNoExt))
-					continue; // Skips loading a mod if it isn't enabled
-
 				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
 				mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
 				using (var finished = new CountdownEvent(1)) {
@@ -91,8 +88,8 @@ namespace tConfigWrapper {
 						BinaryReader reader = new BinaryReader(obj.Value);
 
 						// Create an Obj Loader and load the obj
-						var loader = new ObjLoader(reader, currentModNoExt);
-						loader.LoadObj();
+						//var loader = new ObjLoader(reader, currentModNoExt);
+						//loader.LoadObj(); This was causing errors for some reason.
 
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
 						itemsToLoad.Clear();
