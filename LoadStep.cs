@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using tConfigWrapper.Common;
 using tConfigWrapper.Common.DataTemplates;
 using static tConfigWrapper.Common.Utilities;
 using Terraria;
@@ -21,7 +22,6 @@ using Terraria.ModLoader;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
-		public static string[] Files; // Array of all mods, should be changed to only enabled mods but I am not doing any of that yet :)
 		public static Action<string> LoadProgressText; // Heading text during loading
 		public static Action<float> LoadProgress; // Progress bar during loading: 0-1 scale
 		public static Action<string> LoadSubProgressText; // Subtext during loading
@@ -58,24 +58,31 @@ namespace tConfigWrapper {
 			LoadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
 			LoadProgress?.Invoke(0f);
 
-			Files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj"); // Populates array with all mods
-			foreach (var modName in Files)
-				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
+			foreach (var modName in ModState.AllMods) {
+				if (ModState.EnabledMods.Contains(Path.GetFileNameWithoutExtension(modName)))
+					mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
+			}
 
-			for (int i = 0; i < Files.Length; i++) { // Iterates through every mod
-				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(Files[i])}"); // Sets heading text to display the mod being loaded
-				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(Files[i])}"); // Logs the mod being loaded
+			for (int i = 0; i < ModState.EnabledMods.Count; i++) { // Iterates through every mod
+				string currentMod = ModState.EnabledMods[i];
+				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
+
+				if (!ModState.EnabledMods.Contains(currentModNoExt))
+					continue; // Skips loading a mod if it isn't enabled
+
+				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
+				mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
 				using (var finished = new CountdownEvent(1)) {
-					using (SevenZipExtractor extractor = new SevenZipExtractor(Files[i])) {
+					using (SevenZipExtractor extractor = new SevenZipExtractor(currentMod)) {
 						bool CursedMod = extractor.ArchiveFileNames[0].Contains("Pickaxe+ v1.3a"); // Cursed mod bad
 
 						if (CursedMod)
 							LoadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault it takes so long to load");
 
-						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(Files[i])}");
+						mod.Logger.Debug($"Loading Content: {currentModNoExt}");
 
 						ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
-						DecompressMod(Files[i], extractor, streams); // Decompresses mods since .obj files are literally just 7z files
+						DecompressMod(currentMod, extractor, streams); // Decompresses mods since .obj files are literally just 7z files
 						streamsGlobal.Clear();
 						streamsGlobal = streams;
 
@@ -84,7 +91,7 @@ namespace tConfigWrapper {
 						BinaryReader reader = new BinaryReader(obj.Value);
 
 						// Create an Obj Loader and load the obj
-						var loader = new ObjLoader(reader, Path.GetFileNameWithoutExtension(Files[i]));
+						var loader = new ObjLoader(reader, currentModNoExt);
 						loader.LoadObj();
 
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
@@ -109,32 +116,32 @@ namespace tConfigWrapper {
 						if (contentCount != 0)
 						{
 							Thread itemThread = new Thread(CreateItem);
-							itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							itemThread.Start(new object[] { itemFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread npcThread = new Thread(CreateNPC);
-							npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							npcThread.Start(new object[] { npcFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread tileThread = new Thread(CreateTile);
-							tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							tileThread.Start(new object[] { tileFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread projectileThread = new Thread(CreateProjectile);
-							projectileThread.Start(new object[] { projectileFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							projectileThread.Start(new object[] { projectileFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread wallThread = new Thread(CreateWall);
-							wallThread.Start(new object[] { wallFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							wallThread.Start(new object[] { wallFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread prefixThread = new Thread(CreatePrefix);
-							prefixThread.Start(new object[] { prefixFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							prefixThread.Start(new object[] { prefixFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
-							Thread assemblyThread = new Thread(LoadAssembly);
-							assemblyThread.Start(new object[] { finished, Path.GetFileNameWithoutExtension(Files[i]), Files[i] });
-							finished.AddCount();
+							//Thread assemblyThread = new Thread(LoadAssembly);
+							//assemblyThread.Start(new object[] { finished, currentModNoExt, currentMod, });
+							//finished.AddCount();
 
 							finished.Signal();
 							finished.Wait();
@@ -1025,7 +1032,6 @@ namespace tConfigWrapper {
 		}
 
 		internal static void UnloadStaticFields() {
-			Files = null;
 			LoadProgressText = null;
 			LoadProgress = null; 
 			LoadSubProgressText = null;

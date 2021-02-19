@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using tConfigWrapper.Common;
 using tConfigWrapper.UI;
 using Terraria;
+using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.UI;
 
@@ -22,6 +23,8 @@ namespace tConfigWrapper {
 		private UserInterface _tCFModMenu;
 
 		public override void Load() {
+			ModState.GetAllMods();
+			ModState.DeserializeEnabledMods();
 			Utilities.LoadStaticFields();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			LoadMethods();

@@ -20,7 +20,23 @@ namespace tConfigWrapper {
 		/// </summary>
 		/// <param name="modName">The name of the mod without the path or extension</param>
 		public static ModuleDefinition GetModule(string modName) {
-			ModuleDefinition module = ModuleDefinition.ReadModule(LoadStep.streamsGlobal[$"{modName}\\{modName}.dll"]);
+			MemoryStream stream = LoadStep.streamsGlobal[$"{modName}\\{modName}.dll"];
+			BinaryReader reader = new BinaryReader(stream);
+			string dllVersion = null;
+			string url = null;
+			Version modVersion = new Version(reader.ReadString());
+
+			//if (modVersion < new Version(0, 35, 0))
+			//	return false;
+
+			if (modVersion > new Version(0, 20, 5))
+				reader.ReadInt32();
+
+			if (modVersion > new Version("0.22.8") && reader.ReadBoolean()) {
+				dllVersion = reader.ReadString();
+				url = reader.ReadString();
+			}
+			ModuleDefinition module = ModuleDefinition.ReadModule(stream);
 			LoadedModules.TryAdd(Path.GetFileNameWithoutExtension(modName), module);
 			return module;
 		}
