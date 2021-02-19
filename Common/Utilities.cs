@@ -9,10 +9,6 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 
 namespace tConfigWrapper.Common {
-	public class die{
-
-	}
-
 	/// <summary>
 	/// A class containing utility methods
 	/// </summary>
@@ -157,6 +153,7 @@ namespace tConfigWrapper.Common {
 			containsName = typeof(IdDictionary).GetMethod("ContainsName");
 			getID = typeof(IdDictionary).GetMethod("GetId");
 			LoadStep.LoadStaticFields();
+			AssemblyLoader.LoadStaticFields();
 		}
 
 		internal static void UnloadStaticFields() {
@@ -166,6 +163,7 @@ namespace tConfigWrapper.Common {
 			containsName = null;
 			getID = null;
 			LoadStep.UnloadStaticFields();
+			AssemblyLoader.UnloadStaticFields();
 		}
 
 		public static ConcurrentDictionary<string, object> searchDict = new ConcurrentDictionary<string, object>();

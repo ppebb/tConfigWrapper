@@ -1,4 +1,5 @@
 ﻿using Gajatko.IniFiles;
+using Mono.Cecil;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
@@ -20,11 +21,11 @@ using Terraria.ModLoader;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
-		public static string[] files; // Array of all mods, should be changed to only enabled mods but I am not doing any of that yet :)
-		public static Action<string> loadProgressText; // Heading text during loading
-		public static Action<float> loadProgress; // Progress bar during loading: 0-1 scale
-		public static Action<string> loadSubProgressText; // Subtext during loading
-		public static int taskCompletedCount; // Int used for tracking load progress during content loading
+		public static string[] Files; // Array of all mods, should be changed to only enabled mods but I am not doing any of that yet :)
+		public static Action<string> LoadProgressText; // Heading text during loading
+		public static Action<float> LoadProgress; // Progress bar during loading: 0-1 scale
+		public static Action<string> LoadSubProgressText; // Subtext during loading
+		public static int TaskCompletedCount; // Int used for tracking load progress during content loading
 		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>(); // Dictionaries are selfexplanatory, concurrent so that multiple threads can access them without dying
 		private static ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
 		private static ConcurrentDictionary<string, ModItem> itemsToLoad = new ConcurrentDictionary<string, ModItem>();
@@ -50,42 +51,40 @@ namespace tConfigWrapper {
 			PropertyInfo ProgressProperty = UILoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
 			PropertyInfo SubProgressTextProperty = UILoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
 
-			loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
-			loadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
-			loadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
+			LoadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
+			LoadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
+			LoadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
 
-			loadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
-			loadProgress?.Invoke(0f);
+			LoadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
+			LoadProgress?.Invoke(0f);
 
-			files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj"); // Populates array with all mods
-			foreach (var modName in files)
+			Files = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj"); // Populates array with all mods
+			foreach (var modName in Files)
 				mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
 
-			for (int i = 0; i < files.Length; i++) { // Iterates through every mod
-				loadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(files[i])}"); // Sets heading text to display the mod being loaded
-				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(files[i])}"); // Logs the mod being loaded
+			for (int i = 0; i < Files.Length; i++) { // Iterates through every mod
+				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {Path.GetFileNameWithoutExtension(Files[i])}"); // Sets heading text to display the mod being loaded
+				mod.Logger.Debug($"Loading tConfig Mod: {Path.GetFileNameWithoutExtension(Files[i])}"); // Logs the mod being loaded
 				using (var finished = new CountdownEvent(1)) {
-					using (SevenZipExtractor extractor = new SevenZipExtractor(files[i])) {
+					using (SevenZipExtractor extractor = new SevenZipExtractor(Files[i])) {
 						bool CursedMod = extractor.ArchiveFileNames[0].Contains("Pickaxe+ v1.3a"); // Cursed mod bad
 
 						if (CursedMod)
-							loadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault it takes so long to load");
+							LoadSubProgressText?.Invoke("You are loading a cursed mod, it's not our fault it takes so long to load");
 
-						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(files[i])}");
+						mod.Logger.Debug($"Loading Content: {Path.GetFileNameWithoutExtension(Files[i])}");
 
 						ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
-						DecompressMod(files[i], extractor, streams); // Decompresses mods since .obj files are literally just 7z files
+						DecompressMod(Files[i], extractor, streams); // Decompresses mods since .obj files are literally just 7z files
 						streamsGlobal.Clear();
 						streamsGlobal = streams;
-
-						LoadAssembly.Yes(files[i]);
 
 						// Get the first stream that is an obj file
 						var obj = streams.First(s => s.Key.EndsWith(".obj"));
 						BinaryReader reader = new BinaryReader(obj.Value);
 
 						// Create an Obj Loader and load the obj
-						var loader = new ObjLoader(reader, Path.GetFileNameWithoutExtension(files[i]));
+						var loader = new ObjLoader(reader, Path.GetFileNameWithoutExtension(Files[i]));
 						loader.LoadObj();
 
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
@@ -95,7 +94,7 @@ namespace tConfigWrapper {
 						projectilesToLoad.Clear();
 						wallsToLoad.Clear();
 						prefixesToLoad.Clear();
-						taskCompletedCount = 0;
+						TaskCompletedCount = 0;
 
 						// Slowass linq sorts content and then is assigned to individual threads
 						IEnumerable<string> itemFiles = extractor.ArchiveFileNames.Where(name => name.Contains("\\Item\\") && Path.GetExtension(name) == ".ini");
@@ -110,27 +109,31 @@ namespace tConfigWrapper {
 						if (contentCount != 0)
 						{
 							Thread itemThread = new Thread(CreateItem);
-							itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							itemThread.Start(new object[] { itemFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread npcThread = new Thread(CreateNPC);
-							npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							npcThread.Start(new object[] { npcFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread tileThread = new Thread(CreateTile);
-							tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							tileThread.Start(new object[] { tileFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread projectileThread = new Thread(CreateProjectile);
-							projectileThread.Start(new object[] { projectileFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							projectileThread.Start(new object[] { projectileFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread wallThread = new Thread(CreateWall);
-							wallThread.Start(new object[] { wallFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							wallThread.Start(new object[] { wallFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
 							finished.AddCount();
 
 							Thread prefixThread = new Thread(CreatePrefix);
-							prefixThread.Start(new object[] { prefixFiles, Path.GetFileNameWithoutExtension(files[i]), files[i], finished, extractor, contentCount, streams });
+							prefixThread.Start(new object[] { prefixFiles, Path.GetFileNameWithoutExtension(Files[i]), Files[i], finished, extractor, contentCount, streams });
+							finished.AddCount();
+
+							Thread assemblyThread = new Thread(LoadAssembly);
+							assemblyThread.Start(new object[] { finished, Path.GetFileNameWithoutExtension(Files[i]), Files[i] });
 							finished.AddCount();
 
 							finished.Signal();
@@ -167,41 +170,16 @@ namespace tConfigWrapper {
 						}
 					}
 				}
-				// this is for the obj (im scared of it)
-				//stream.Position = 0L;
-				//BinaryReader reader;
-				//using (reader = new BinaryReader(stream))
-				//{
-				//	string modName = Path.GetFileName(files[i]).Split('.')[0];
-				//	stream.Position = 0L;
-				//	var version = new Version(reader.ReadString());
-
-				//	// Don't know what these things are
-				//	int modVersion;
-				//	string modDLVersion, modURL;
-				//	if (version >= new Version("0.20.5"))
-				//		modVersion = reader.ReadInt32();
-
-				//	if (version >= new Version("0.22.8") && reader.ReadBoolean())
-				//	{
-				//		modDLVersion = reader.ReadString();
-				//		modURL = reader.ReadString();
-				//	}
-
-				//	reader.Close();
-				//	stream.Close();
-				//}
-
 			}
 			//Reset progress bar
-			loadSubProgressText?.Invoke("");
-			loadProgressText?.Invoke("Loading mod");
-			loadProgress?.Invoke(0f);
+			LoadSubProgressText?.Invoke("");
+			LoadProgressText?.Invoke("Loading mod");
+			LoadProgress?.Invoke(0f);
 		}
 
 		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {
 			List<string> fileNames = extractor.ArchiveFileNames.ToList();
-			loadSubProgressText?.Invoke("Decompressing");
+			LoadSubProgressText?.Invoke("Decompressing");
 			double numThreads = Math.Min((double)ModContent.GetInstance<WrapperModConfig>().NumThreads, fileNames.Count);
 
 			using (CountdownEvent decompressCount = new CountdownEvent(1)) {
@@ -241,7 +219,7 @@ namespace tConfigWrapper {
 			using (SevenZipExtractor extractor = new SevenZipExtractor(fileStream)) {
 				decompressTotalFiles += files.Count; // Counts the number of items that need to be loaded for accurate progress bar
 				foreach (var fileName in files) {
-					loadProgress?.Invoke((float)decompressTasksCompleted / decompressTotalFiles); // Sets the progress bar
+					LoadProgress?.Invoke((float)decompressTasksCompleted / decompressTotalFiles); // Sets the progress bar
 					// If the extension is not valid, skip the file
 					string extension = Path.GetExtension(fileName);
 					if (!(extension == ".ini" || extension == ".cs" || extension == ".png" || extension == ".dll" || extension == ".obj"))
@@ -260,9 +238,21 @@ namespace tConfigWrapper {
 			countdown.Signal();
 		}
 
+		public static void LoadAssembly(object stateInfo) {
+			object[] parameters = (object[])stateInfo;
+			CountdownEvent finished = (CountdownEvent)parameters[0];
+
+			ModuleDefinition module = AssemblyLoader.GetModule(Path.GetFileNameWithoutExtension((string)parameters[2]));
+			AssemblyLoader.FixIL((string)parameters[1], module);
+			foreach (var dynamicMethod in AssemblyLoader.AllDynamicMethods)
+				AssemblyLoader.RegisterDelegate(dynamicMethod.Value, dynamicMethod.Key);
+
+			finished.Signal();
+		}
+
 		public static void SetupRecipes() { // Sets up recipes, what were you expecting?
-			loadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
-			loadProgress.Invoke(0f);
+			LoadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
+			LoadProgress.Invoke(0f);
 			int progressCount = 0;
 			bool initialized = (bool)Assembly.GetAssembly(typeof(Mod)).GetType("Terraria.ModLoader.MapLoader").GetField("initialized", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null); // Check if the map is already initialized
 			foreach (var iniFileSection in recipeDict) { // Load every recipe in the recipe dict
@@ -343,7 +333,7 @@ namespace tConfigWrapper {
 				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
 					recipe?.AddRecipe();
 				if (initialized)
-					loadProgress.Invoke(progressCount / recipeDict.Count);
+					LoadProgress.Invoke(progressCount / recipeDict.Count);
 			}
 		}
 
@@ -352,10 +342,10 @@ namespace tConfigWrapper {
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreateItem(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
@@ -476,9 +466,9 @@ namespace tConfigWrapper {
 			}
 
 			if (itemTexture != null)
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, createWall, toolTip, itemTexture));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, internalName, itemName, createTile, shoot, createWall, toolTip, itemTexture));
 			else
-				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, itemName, createTile, shoot, createWall, toolTip));
+				itemsToLoad.TryAdd(internalName, new BaseItem((ItemInfo)info, internalName, itemName, createTile, shoot, createWall, toolTip));
 			reader.Dispose();
 			//}
 		}
@@ -488,10 +478,10 @@ namespace tConfigWrapper {
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreateNPC(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
@@ -609,10 +599,10 @@ namespace tConfigWrapper {
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreateTile(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
@@ -728,8 +718,8 @@ namespace tConfigWrapper {
 		private static int mapIterationCount;
 		public static void GetMapEntries() { // Loads tile map entries
 			mapIterationCount = 0;
-			loadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
-			loadProgress?.Invoke(0f);
+			LoadProgressText?.Invoke("tConfig Wrapper: Loading Map Entries");
+			LoadProgress?.Invoke(0f);
 			SetupRecipes(); // Check what tiles are used in recipes so it can add a name to it
 			int mapContentCount = tileMapData.Count + wallsToLoad.Count;
 
@@ -754,7 +744,7 @@ namespace tConfigWrapper {
 
 			foreach (var (modTile, (display, name)) in tileMapData) {
 				mapIterationCount++;
-				loadSubProgressText?.Invoke(name);
+				LoadSubProgressText?.Invoke(name);
 				Texture2D tileTex = Main.tileTexture[modTile.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
@@ -777,7 +767,7 @@ namespace tConfigWrapper {
 				else
 					modTile.AddMapEntry(averageColor);
 
-				loadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
+				LoadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
 			}
 			countdown.Signal();
 		}
@@ -787,7 +777,7 @@ namespace tConfigWrapper {
 
 			foreach (var (wallName, (modWall, texture)) in wallsToLoad) {
 				mapIterationCount++;
-				loadSubProgressText?.Invoke(wallName);
+				LoadSubProgressText?.Invoke(wallName);
 				Texture2D wallTex = Main.wallTexture[modWall.Type];
 				Color[] colors = new Color[wallTex.Width * wallTex.Height];
 				wallTex.GetData(colors);
@@ -805,7 +795,7 @@ namespace tConfigWrapper {
 				Color averageColor = new Color(r, g, b);
 
 				modWall.AddMapEntry(averageColor);
-				loadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
+				LoadProgress?.Invoke(mapIterationCount / (tileMapData.Count + wallsToLoad.Count));
 			}
 			countdown.Signal();
 		}
@@ -815,10 +805,10 @@ namespace tConfigWrapper {
 			CountdownEvent countdown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreateProjectile(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countdown.Signal();
 		}
@@ -889,10 +879,10 @@ namespace tConfigWrapper {
 			CountdownEvent countDown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreateWall(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countDown.Signal();
 		}
@@ -945,10 +935,10 @@ namespace tConfigWrapper {
 			CountdownEvent countDown = (CountdownEvent)parameters[3];
 
 			foreach (var fileName in (IEnumerable<string>)parameters[0]) {
-				loadSubProgressText?.Invoke(fileName);
+				LoadSubProgressText?.Invoke(fileName);
 				CreatePrefix(fileName, (string)parameters[1], (string)parameters[2], (ConcurrentDictionary<string, MemoryStream>)parameters[6]);
-				taskCompletedCount++;
-				loadProgress?.Invoke((float)taskCompletedCount / (int)parameters[5]);
+				TaskCompletedCount++;
+				LoadProgress?.Invoke((float)TaskCompletedCount / (int)parameters[5]);
 			}
 			countDown.Signal();
 		}
@@ -1035,10 +1025,10 @@ namespace tConfigWrapper {
 		}
 
 		internal static void UnloadStaticFields() {
-			files = null;
-			loadProgressText = null;
-			loadProgress = null; 
-			loadSubProgressText = null;
+			Files = null;
+			LoadProgressText = null;
+			LoadProgress = null; 
+			LoadSubProgressText = null;
 			globalItemInfos = null;
 			recipeDict = null;
 			itemsToLoad = null;

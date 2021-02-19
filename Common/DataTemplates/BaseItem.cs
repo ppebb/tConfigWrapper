@@ -1,4 +1,6 @@
-﻿using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using MonoMod.Cil;
 using System.Reflection;
 using Terraria;
 using Terraria.ModLoader;
@@ -9,6 +11,7 @@ namespace tConfigWrapper.Common.DataTemplates {
 		public override bool CloneNewInstances => true;
 
 		private ItemInfo _info;
+		private readonly string _internalName;
 		private readonly string _name;
 		private readonly string _tooltip;
 		private readonly Texture2D _texture;
@@ -18,8 +21,9 @@ namespace tConfigWrapper.Common.DataTemplates {
 
 		public BaseItem() { }
 
-		public BaseItem(ItemInfo itemInfo, string name = null, string createTile = null, string shoot = null, string createWall = null, string tooltip = null, Texture2D texture = null) {
+		public BaseItem(ItemInfo itemInfo, string internalName = null, string name = null, string createTile = null, string shoot = null, string createWall = null, string tooltip = null, Texture2D texture = null) {
 			_info = itemInfo;
+			_internalName = internalName;
 			_name = name;
 			_tooltip = tooltip;
 			_texture = texture;
@@ -69,6 +73,10 @@ namespace tConfigWrapper.Common.DataTemplates {
 				if (infoFieldValue != null)
 					itemField.SetValue(item, infoFieldValue);
 			}
+		}
+
+		public override void MeleeEffects(Player player, Rectangle hitbox) {
+			AssemblyLoader.UseItemEffect[$"{_internalName.Split(':')[0]}:{_name}:UseItemEffect"].Invoke(player, hitbox);
 		}
 	}
 }
