@@ -12,6 +12,8 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 ! Tiles
 ! Projectiles
 ! Walls
+! Dll loading
+! Script loading
 
 # Haven't started:
 - Buff loading
@@ -19,8 +21,6 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 - Gore loading
 - Global Classes
 - Generic Classes
-- Dll loading
-- Script loading
 ```
 [![forthebadge](https://forthebadge.com/images/badges/0-percent-optimized.svg)](https://forthebadge.com)
 [![forthebadge](https://forthebadge.com/images/badges/as-seen-on-tv.svg)](https://forthebadge.com)
