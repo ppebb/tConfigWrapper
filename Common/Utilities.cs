@@ -154,8 +154,7 @@ namespace tConfigWrapper.Common {
 			getID = typeof(IdDictionary).GetMethod("GetId");
 			LoadStep.LoadStaticFields();
 			AssemblyLoader.LoadStaticFields();
-			ModState.AllMods = new List<string>();
-			ModState.EnabledMods = new List<string>();
+			ModState.LoadStaticFields();
 		}
 
 		internal static void UnloadStaticFields() {
@@ -166,8 +165,7 @@ namespace tConfigWrapper.Common {
 			getID = null;
 			LoadStep.UnloadStaticFields();
 			AssemblyLoader.UnloadStaticFields();
-			ModState.AllMods = null;
-			ModState.EnabledMods = null;
+			ModState.UnloadStaticFields();
 		}
 
 		public static ConcurrentDictionary<string, object> searchDict = new ConcurrentDictionary<string, object>();

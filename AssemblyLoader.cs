@@ -14,6 +14,7 @@ namespace tConfigWrapper {
 		public static ConcurrentDictionary<string, ModuleDefinition> LoadedModules = new ConcurrentDictionary<string, ModuleDefinition>();
 		public static ConcurrentDictionary<string, DynamicMethodDefinition> AllDynamicMethods = new ConcurrentDictionary<string, DynamicMethodDefinition>();
 		public static ConcurrentDictionary<string, Action<Player, Rectangle>> UseItemEffect = new ConcurrentDictionary<string, Action<Player, Rectangle>>();
+		public static ModuleDefinition TerrariaModule = ModuleDefinition.ReadModule(typeof(Main).Assembly.Location);
 
 		/// <summary>
 		/// Gets the assembly associated with the modName
@@ -21,21 +22,6 @@ namespace tConfigWrapper {
 		/// <param name="modName">The name of the mod without the path or extension</param>
 		public static ModuleDefinition GetModule(string modName) {
 			MemoryStream stream = LoadStep.streamsGlobal[$"{modName}\\{modName}.dll"];
-			//BinaryReader reader = new BinaryReader(stream);
-			//string dllVersion = null;
-			//string url = null;
-			//Version modVersion = new Version(reader.ReadString());
-
-			////if (modVersion < new Version(0, 35, 0))
-			////	return false;
-
-			//if (modVersion > new Version(0, 20, 5))
-			//	reader.ReadInt32();
-
-			//if (modVersion > new Version("0.22.8") && reader.ReadBoolean()) {
-			//	dllVersion = reader.ReadString();
-			//	url = reader.ReadString();
-			//}
 			ModuleDefinition module = ModuleDefinition.ReadModule(stream);
 			LoadedModules.TryAdd(Path.GetFileNameWithoutExtension(modName), module);
 			return module;
@@ -65,15 +51,47 @@ namespace tConfigWrapper {
 
 		public static DynamicMethodDefinition ToDynamicMethod(this MethodDefinition method) {
 			List<Type> parameters = new List<Type>();
-			foreach (var param in method.GenericParameters)
-				parameters.Add(Type.GetType(param.FullName));
+			foreach (var param in method.Parameters) {
+				string[] typeArr = param.ParameterType.FullName.Split('.');
+				Array.Resize(ref typeArr, typeArr.Length - 1);
+				string nameSpace = string.Join(".", typeArr);
 
-			DynamicMethodDefinition dynamicMethod = new DynamicMethodDefinition(method.Name, Type.GetType(method.ReturnType.FullName), parameters.ToArray());
+				Assembly asm = null;
+
+				if (nameSpace.StartsWith("System"))
+					asm = typeof(object).Assembly;
+				else if (nameSpace.StartsWith("Terraria"))
+					asm = typeof(Main).Assembly;
+				else if (nameSpace.StartsWith("Microsoft"))
+					asm = typeof(Vector2).Assembly;
+
+				Type type = asm.GetType(param.ParameterType.FullName);
+				
+				if (param.ParameterType.IsByReference)
+					type = type.MakeByRefType();
+
+				parameters.Add(type);
+			}
+
+			DynamicMethodDefinition dynamicMethod = new DynamicMethodDefinition($"{method.DeclaringType.Name}_{method.Name}", Type.GetType(method.ReturnType.FullName), parameters.ToArray());
 			ILProcessor il = dynamicMethod.GetILProcessor();
-			
-			foreach (Instruction instruction in method.Body.Instructions)
-				il.Emit(instruction.OpCode, instruction.Operand);
 
+			foreach (Instruction instruction in method.Body.Instructions) {
+				if (instruction.Operand is FieldReference reference) {
+					TypeReference fieldType = reference.FieldType;
+					if (fieldType.Scope.ToString().StartsWith("tConfig")) {
+						fieldType = new TypeReference(fieldType.Namespace, fieldType.Name, TerrariaModule, TerrariaModule);
+					}
+
+					TypeReference declaringType = reference.DeclaringType;
+					if (declaringType.Scope.ToString().StartsWith("tConfig")) {
+						declaringType = new TypeReference(declaringType.Namespace, declaringType.Name, TerrariaModule, TerrariaModule);
+					}
+					il.Emit(instruction.OpCode, new FieldReference(reference.Name, fieldType, declaringType));
+				}
+				else 
+					il.Emit(instruction.OpCode, instruction.Operand);
+			}
 			return dynamicMethod;
 		}
 

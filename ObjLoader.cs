@@ -73,9 +73,9 @@ namespace tConfigWrapper {
 			byte[] rawAssembly = _reader.ReadBytes(byteCount);
 			Assembly assembly = Assembly.Load(rawAssembly);
 			// TODO: Do stuff with the assembly
-			foreach (var definedType in assembly.DefinedTypes) {
+			//foreach (var definedType in assembly.DefinedTypes) {
 				//var someInstance = Activator.CreateInstance(definedType);
-			}
+			//}
 		}
 
 		private void LoadCustomSounds() {

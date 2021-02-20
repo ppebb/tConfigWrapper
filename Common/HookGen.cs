@@ -18,6 +18,18 @@ namespace tConfigWrapper {
 				HookEndpointManager.Remove<Hook_AddMenuButtons>(typeof(Mod).Assembly.GetType("Terraria.ModLoader.UI.Interface").GetMethod("AddMenuButtons", BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic), value);
 			}
 		}
+
+		//public delegate void Orig_DisplayLoadError(string msg, Exception e, bool fatal, bool continueIsRetry);
+		//public delegate void Hook_DisplayLoadError(Orig_DisplayLoadError orig, string msg, Exception e, bool fatal, bool continueIsRetry);
+
+		//public static event Hook_DisplayLoadError On_DisplayLoadError {
+		//	add {
+		//		HookEndpointManager.Add<Hook_DisplayLoadError>(typeof(Mod).Assembly.GetType("Terraria.ModLoader.ModLoader").GetMethod("DisplayLoadError", BindingFlags.NonPublic | BindingFlags.Static), value);
+		//	}
+		//	remove {
+		//		HookEndpointManager.Remove<Hook_DisplayLoadError>(typeof(Mod).Assembly.GetType("Terraria.ModLoader.ModLoader").GetMethod("DisplayLoadError", BindingFlags.NonPublic | BindingFlags.Static), value);
+		//	}
+		//}
 	}
 
 	public static class MenuUtils {

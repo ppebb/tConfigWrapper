@@ -8,7 +8,6 @@ using System.Collections.Generic;
 using tConfigWrapper.Common;
 using tConfigWrapper.UI;
 using Terraria;
-using Terraria.ID;
 using Terraria.ModLoader;
 using Terraria.UI;
 
@@ -26,6 +25,8 @@ namespace tConfigWrapper {
 			Utilities.LoadStaticFields();
 			ModState.GetAllMods();
 			ModState.DeserializeEnabledMods();
+			ModState.DeserializePrevPlayerMods();
+			ModState.DeserializePrevWorldMods();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
 			LoadMethods();
 			tCFModMenu = new tConfigModMenu();
@@ -33,7 +34,7 @@ namespace tConfigWrapper {
 			_tCFModMenu = new UserInterface();
 			_tCFModMenu.SetState(tCFModMenu);
 
-			var sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
+			byte[] sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
 			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
 
 			LoadStep.Setup();

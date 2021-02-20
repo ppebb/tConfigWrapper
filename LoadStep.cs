@@ -37,6 +37,7 @@ namespace tConfigWrapper {
 		internal static ConcurrentBag<ModPrefix> suffixes = new ConcurrentBag<ModPrefix>();
 		internal static ConcurrentDictionary<ModTile, (bool, string)> tileMapData = new ConcurrentDictionary<ModTile, (bool, string)>();
 		internal static ConcurrentDictionary<string, MemoryStream> streamsGlobal = new ConcurrentDictionary<string, MemoryStream>();
+		internal static string CurrentLoadingMod;
 
 		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
 
@@ -66,6 +67,7 @@ namespace tConfigWrapper {
 			for (int i = 0; i < ModState.EnabledMods.Count; i++) { // Iterates through every mod
 				string currentMod = ModState.EnabledMods[i];
 				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
+				CurrentLoadingMod = currentModNoExt;
 
 				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
 				mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
@@ -88,8 +90,8 @@ namespace tConfigWrapper {
 						BinaryReader reader = new BinaryReader(obj.Value);
 
 						// Create an Obj Loader and load the obj
-						//var loader = new ObjLoader(reader, currentModNoExt);
-						//loader.LoadObj(); This was causing errors for some reason.
+						var loader = new ObjLoader(reader, currentModNoExt);
+						loader.LoadObj(); // This was causing errors for some reason.
 
 						// Clear dictionaries and task count or else stuff from other mods will interfere with the current mod being loaded
 						itemsToLoad.Clear();
@@ -136,9 +138,9 @@ namespace tConfigWrapper {
 							prefixThread.Start(new object[] { prefixFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
-							//Thread assemblyThread = new Thread(LoadAssembly);
-							//assemblyThread.Start(new object[] { finished, currentModNoExt, currentMod, });
-							//finished.AddCount();
+							Thread assemblyThread = new Thread(LoadAssembly);
+							assemblyThread.Start(new object[] { finished, currentModNoExt, currentMod, });
+							finished.AddCount();
 
 							finished.Signal();
 							finished.Wait();
@@ -179,6 +181,7 @@ namespace tConfigWrapper {
 			LoadSubProgressText?.Invoke("");
 			LoadProgressText?.Invoke("Loading mod");
 			LoadProgress?.Invoke(0f);
+			CurrentLoadingMod = null;
 		}
 
 		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {

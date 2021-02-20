@@ -1,6 +1,6 @@
-﻿using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using ReLogic.Graphics;
+using tConfigWrapper.Common;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -8,9 +8,16 @@ namespace tConfigWrapper {
 	public partial class tConfigWrapper : Mod {
 		public void LoadMethods() {
 			Hooks.On_AddMenuButtons += Hooks_On_AddMenuButtons;
+			//Hooks.On_DisplayLoadError += Hooks_On_DisplayLoadError; // Possible code to unload broken tConfig Mods on crash, but the issue is that now I can't get the error menu to pop up ever.
 			On.Terraria.Main.DrawMenu += Main_DrawMenu;
 			On.Terraria.Item.AffixName += Item_AffixName;
 		}
+
+		//private void Hooks_On_DisplayLoadError(Hooks.Orig_DisplayLoadError orig, string msg, System.Exception e, bool fatal, bool continueIsRetry) {
+		//	if (msg.Contains("tConfigWrapper"))
+		//		ModState.DisableMod(LoadStep.CurrentLoadingMod);
+		//	orig(msg, e, fatal, continueIsRetry);
+		//}
 
 		public int drawLogFailMessageTimer;
 		private void Main_DrawMenu(On.Terraria.Main.orig_DrawMenu orig, Main self, GameTime gameTime) {
