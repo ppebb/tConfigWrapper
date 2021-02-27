@@ -24,9 +24,11 @@ namespace tConfigWrapper.UI {
 				string modName = ModState.AllMods[i];
 				string s() { return ModState.EnabledMods.Contains(modName) ? "Enabled" : "Disabled"; }
 				Color c() { return ModState.EnabledMods.Contains(modName) ? Color.Green : Color.Red; };
-				GenericButton switchButton = new GenericButton(s, new Vector2(300, 10 + (i * 20)), Vector2.One, () => { ModState.ToggleMod(modName); }, c, Main.fontMouseText);
+				GenericButton switchButton = new GenericButton(s, new Vector2(300, 65 + (i * 20)), Vector2.One, () => { ModState.ToggleMod(modName); }, c, Main.fontMouseText);
 				Append(switchButton);
 			}
+			UITextBox modPackTextBox = new UITextBox(new Vector2(500, 500), Main.fontMouseText.MeasureString("Click to type"), "Click to type", "Press Enter to save the modpack", true);
+			Append(modPackTextBox);
 		}
 
 		public override void Update(GameTime gameTime) {
@@ -36,11 +38,12 @@ namespace tConfigWrapper.UI {
 		}
 
 		protected override void DrawSelf(SpriteBatch spriteBatch) {
+			ChatManager.DrawColorCodedStringWithShadow(spriteBatch, Main.fontDeathText, "tConfig Mods", new Vector2(50, 10), Color.White, 0f, Vector2.Zero, new Vector2(0.75f, 0.75f));
 			for (int i = 0; i < ModState.AllMods.Count; i++) {
 				string fileWithoutExt = Path.GetFileNameWithoutExtension(ModState.AllMods[i]);
-				ChatManager.DrawColorCodedStringWithShadow(spriteBatch, Main.fontMouseText, fileWithoutExt, new Vector2(50, 10 + (i * 20)), Color.White, 0f, Vector2.Zero, Vector2.One);
+				ChatManager.DrawColorCodedStringWithShadow(spriteBatch, Main.fontMouseText, fileWithoutExt, new Vector2(50, 65 + (i * 20)), Color.White, 0f, Vector2.Zero, Vector2.One);
 				if (ModState.ChangedMods.Contains(ModState.AllMods[i]))
-					ChatManager.DrawColorCodedStringWithShadow(spriteBatch, Main.fontMouseText, "* Reload Required!", new Vector2(400, 10 + (i * 20)), Color.Red, 0f, Vector2.Zero, Vector2.One);
+					ChatManager.DrawColorCodedStringWithShadow(spriteBatch, Main.fontMouseText, "* Reload Required!", new Vector2(400, 65 + (i * 20)), Color.Red, 0f, Vector2.Zero, Vector2.One);
 			}
 		}
 	}

@@ -12,7 +12,6 @@ using Terraria;
 namespace tConfigWrapper {
 	public static class AssemblyLoader {
 		public static ConcurrentDictionary<string, ModuleDefinition> LoadedModules = new ConcurrentDictionary<string, ModuleDefinition>();
-		public static ConcurrentDictionary<string, DynamicMethodDefinition> AllDynamicMethods = new ConcurrentDictionary<string, DynamicMethodDefinition>();
 		public static ConcurrentDictionary<string, Action<Player, Rectangle>> UseItemEffect = new ConcurrentDictionary<string, Action<Player, Rectangle>>();
 		public static ModuleDefinition TerrariaModule = ModuleDefinition.ReadModule(typeof(Main).Assembly.Location);
 
@@ -30,12 +29,13 @@ namespace tConfigWrapper {
 		public static void FixIL(string modName, ModuleDefinition module) {
 			foreach (TypeDefinition type in module.Types) {
 				foreach (MethodDefinition method in type.Methods) {
-					if (method.Name == ".ctor")
+					if (method.Name != "UseItemEffect")
 						continue;
 
 					// Do cool stuff to fix IL and make it not broke!
+
 					DynamicMethodDefinition dynamicMethod = method.ToDynamicMethod();
-					AllDynamicMethods.TryAdd($"{modName}:{method.DeclaringType.Name.Replace("_", "")}:{dynamicMethod.Name}", dynamicMethod);
+					RegisterDelegate(dynamicMethod, $"{modName}:{method.DeclaringType.Name.Replace("_", "")}:{dynamicMethod.Name}");
 				}
 			}
 		}
@@ -79,10 +79,10 @@ namespace tConfigWrapper {
 			foreach (Instruction instruction in method.Body.Instructions) {
 				if (instruction.Operand is FieldReference reference) {
 					TypeReference fieldType = reference.FieldType;
+
 					if (fieldType.Scope.ToString().StartsWith("tConfig")) {
 						fieldType = new TypeReference(fieldType.Namespace, fieldType.Name, TerrariaModule, TerrariaModule);
 					}
-
 					TypeReference declaringType = reference.DeclaringType;
 					if (declaringType.Scope.ToString().StartsWith("tConfig")) {
 						declaringType = new TypeReference(declaringType.Namespace, declaringType.Name, TerrariaModule, TerrariaModule);
@@ -92,19 +92,26 @@ namespace tConfigWrapper {
 				else 
 					il.Emit(instruction.OpCode, instruction.Operand);
 			}
+
+			foreach (Instruction inst in dynamicMethod.Definition.Body.Instructions) {
+				if (inst.Operand is Instruction targetOrig) {
+					inst.Operand = dynamicMethod.Definition.Body.Instructions[method.Body.Instructions.IndexOf(targetOrig)];
+				}
+			}
+
 			return dynamicMethod;
 		}
 
 		internal static void LoadStaticFields() {
-			AllDynamicMethods = new ConcurrentDictionary<string, DynamicMethodDefinition>();
 			LoadedModules = new ConcurrentDictionary<string, ModuleDefinition>();
 			UseItemEffect = new ConcurrentDictionary<string, Action<Player, Rectangle>>();
-		}
+			TerrariaModule = ModuleDefinition.ReadModule(typeof(Main).Assembly.Location);
+	}
 
 		internal static void UnloadStaticFields() {
-			AllDynamicMethods = null;
 			LoadedModules = null;
 			UseItemEffect = null;
+			TerrariaModule = null;
 		}
 	}
 }

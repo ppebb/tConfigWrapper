@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Terraria;
 using Terraria.ModLoader;
+using Terraria.World.Generation;
 
 namespace tConfigWrapper.Common {
 	public class PrevMods {
@@ -61,7 +62,7 @@ namespace tConfigWrapper.Common {
 
 		public static void SerializePreviousWorldMods() => File.WriteAllText(tConfigWrapper.ModsPath + "\\prevWorldMods.json", JsonConvert.SerializeObject(PrevLoadedWorldMods, Formatting.Indented));
 
-		public static void SerializeModPack(string name, List<string> mods) => File.WriteAllText(tConfigWrapper.ModsPath + $"\\ModPacks\\{name}.json", JsonConvert.SerializeObject(mods, Formatting.Indented));
+		public static void SerializeModPack(string name) => File.WriteAllText(tConfigWrapper.ModsPath + $"\\ModPacks\\{name}.json", JsonConvert.SerializeObject(EnabledMods, Formatting.Indented));
 
 		public static void DeserializeEnabledMods() {
 			if (File.Exists(tConfigWrapper.ModsPath + "\\enabled.json")) {
@@ -103,6 +104,17 @@ namespace tConfigWrapper.Common {
 	}
 
 	public class SaveLoadedMods : ModPlayer {
+		public override void SetupStartInventory(IList<Item> items, bool mediumcoreDeath) { // Runs on player creation, so that mods are serialized even if you don't enter the world.
+			if (ModState.PrevLoadedPlayerMods.ContainsKey(player.name))
+				ModState.PrevLoadedPlayerMods.Remove(player.name);
+
+			ModState.PrevLoadedPlayerMods.Add(player.name, new PrevMods {
+				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
+			});
+
+			ModState.SerializePreviousPlayerMods();
+		}
+
 		public override void OnEnterWorld(Player player) {
 			if (ModState.PrevLoadedPlayerMods.ContainsKey(player.name))
 				ModState.PrevLoadedPlayerMods.Remove(player.name);
@@ -113,10 +125,22 @@ namespace tConfigWrapper.Common {
 
 			ModState.SerializePreviousPlayerMods();
 
-			if (ModState.PrevLoadedWorldMods.ContainsKey(Main.worldName))
-				ModState.PrevLoadedWorldMods.Remove(Main.worldName);
+			if (ModState.PrevLoadedWorldMods.ContainsKey($"{Main.worldID}:{Main.worldName}"))
+				ModState.PrevLoadedWorldMods.Remove($"{Main.worldID}:{Main.worldName}");
 
-			ModState.PrevLoadedWorldMods.Add(player.name, new PrevMods {
+			ModState.PrevLoadedWorldMods.Add($"{Main.worldID}:{Main.worldName}", new PrevMods {
+				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
+			});
+			ModState.SerializePreviousWorldMods();
+		}
+	}
+
+	public class SaveModsOnWorldCreation : ModWorld {
+		public override void ModifyWorldGenTasks(List<GenPass> tasks, ref float totalWeight) { // Runs on world creation, so that mods are serialized even if you don't enter the world.
+			if (ModState.PrevLoadedWorldMods.ContainsKey($"{Main.worldID}:{Main.worldName}"))
+				ModState.PrevLoadedWorldMods.Remove($"{Main.worldID}:{Main.worldName}");
+
+			ModState.PrevLoadedWorldMods.Add($"{Main.worldID}:{Main.worldName}", new PrevMods {
 				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
 			});
 			ModState.SerializePreviousWorldMods();

@@ -2,7 +2,7 @@
 using Terraria.ModLoader.Config;
 
 namespace tConfigWrapper {
-	public class WrapperModConfig : ModConfig {
+	public class LoadConfig : ModConfig {
 
 		public override ConfigScope Mode => ConfigScope.ClientSide;
 

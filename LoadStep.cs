@@ -187,7 +187,7 @@ namespace tConfigWrapper {
 		private static void DecompressMod(string objPath, SevenZipExtractor extractor, ConcurrentDictionary<string, MemoryStream> streams) {
 			List<string> fileNames = extractor.ArchiveFileNames.ToList();
 			LoadSubProgressText?.Invoke("Decompressing");
-			double numThreads = Math.Min((double)ModContent.GetInstance<WrapperModConfig>().NumThreads, fileNames.Count);
+			double numThreads = Math.Min((double)ModContent.GetInstance<LoadConfig>().NumThreads, fileNames.Count);
 
 			using (CountdownEvent decompressCount = new CountdownEvent(1)) {
 				// Split the files into numThreads chunks
@@ -251,8 +251,6 @@ namespace tConfigWrapper {
 
 			ModuleDefinition module = AssemblyLoader.GetModule(Path.GetFileNameWithoutExtension((string)parameters[2]));
 			AssemblyLoader.FixIL((string)parameters[1], module);
-			foreach (var dynamicMethod in AssemblyLoader.AllDynamicMethods)
-				AssemblyLoader.RegisterDelegate(dynamicMethod.Value, dynamicMethod.Key);
 
 			finished.Signal();
 		}

@@ -21,6 +21,10 @@ namespace tConfigWrapper {
 		internal tConfigModMenu tCFModMenu;
 		private UserInterface _tCFModMenu;
 
+		// Read by ModHelpers
+		public static string GithubUserName => "pollen00";
+		public static string GithubProjectName => "tConfigWrapper";
+
 		public override void Load() {
 			Utilities.LoadStaticFields();
 			ModState.GetAllMods();
@@ -28,6 +32,7 @@ namespace tConfigWrapper {
 			ModState.DeserializePrevPlayerMods();
 			ModState.DeserializePrevWorldMods();
 			Directory.CreateDirectory(ModsPath + "\\ModSettings");
+			Directory.CreateDirectory(ModsPath + "\\ModPacks");
 			LoadMethods();
 			tCFModMenu = new tConfigModMenu();
 			tCFModMenu.Activate();
@@ -49,7 +54,7 @@ namespace tConfigWrapper {
 		}
 
 		public override void PostAddRecipes() {
-			if (ReportErrors && ModContent.GetInstance<WrapperModConfig>().SendConfig)
+			if (ReportErrors && ModContent.GetInstance<LoadConfig>().SendConfig)
 				ThreadPool.QueueUserWorkItem(UploadLogs, 0);
 		}
 
