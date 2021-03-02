@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using SevenZip;
 using System;
 using System.IO;
 using System.Net;
@@ -41,6 +42,7 @@ namespace tConfigWrapper {
 
 			byte[] sevenZipBytes = GetFileBytes(Path.Combine("lib", Environment.Is64BitProcess ? "7z64.dll" : "7z.dll"));
 			File.WriteAllBytes(SevenDllPath, sevenZipBytes);
+			SevenZipBase.SetLibraryPath(SevenDllPath);
 
 			LoadStep.Setup();
 		}
