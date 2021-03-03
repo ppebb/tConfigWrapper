@@ -52,9 +52,8 @@ namespace tConfigWrapper.Common {
 				ChangedMods.Remove(modName);
 		}
 
-		public static void GetAllMods() {
-			AllMods = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj").ToList();
-		}
+		public static void GetAllMods() => AllMods = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj").ToList();
+
 
 		public static void SerializeEnabledMods() => File.WriteAllText(tConfigWrapper.ModsPath + "\\enabled.json", JsonConvert.SerializeObject(EnabledMods, Formatting.Indented));
 
@@ -69,6 +68,8 @@ namespace tConfigWrapper.Common {
 				EnabledMods = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(tConfigWrapper.ModsPath + "\\enabled.json"));
 				EnabledModsOld = new List<string>(EnabledMods);
 			}
+			else
+				EnabledModsOld = new List<string>();
 		}
 
 		public static void DeserializePrevPlayerMods() {

@@ -138,9 +138,9 @@ namespace tConfigWrapper {
 							prefixThread.Start(new object[] { prefixFiles, currentModNoExt, currentMod, finished, extractor, contentCount, streams });
 							finished.AddCount();
 
-							Thread assemblyThread = new Thread(LoadAssembly);
-							assemblyThread.Start(new object[] { finished, currentModNoExt, currentMod, });
-							finished.AddCount();
+							//Thread assemblyThread = new Thread(LoadAssembly);
+							//assemblyThread.Start(new object[] { finished, currentModNoExt, currentMod, });
+							//finished.AddCount();
 
 							finished.Signal();
 							finished.Wait();

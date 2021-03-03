@@ -89,7 +89,7 @@ namespace tConfigWrapper {
 					}
 					il.Emit(instruction.OpCode, new FieldReference(reference.Name, fieldType, declaringType));
 				}
-				else 
+				else
 					il.Emit(instruction.OpCode, instruction.Operand);
 			}
 
