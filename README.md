@@ -5,9 +5,6 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 ```diff
 # Done:
 + Prefixes
-+ Assembly Loading
-+ IL Patching
-+ Script Loading
 
 # Doing:
 ! NPCs
@@ -15,8 +12,9 @@ tConfig Wrapper is a mod that allows for tConfig mods to be run within tModLoade
 ! Tiles
 ! Projectiles
 ! Walls
-! Dll loading
-! Script loading
+! Assembly Loading
+! IL Patching
+! Script Loading
 
 # Haven't started:
 - Buff loading
