@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using tConfigWrapper.Common;
 using tConfigWrapper.UI;
 using Terraria;
@@ -57,7 +58,7 @@ namespace tConfigWrapper {
 
 		public override void PostAddRecipes() {
 			if (ReportErrors && ModContent.GetInstance<LoadConfig>().SendConfig)
-				ThreadPool.QueueUserWorkItem(UploadLogs, 0);
+				Task.Run(() => UploadLogs(0));
 		}
 
 		public override void Unload() {
@@ -88,7 +89,7 @@ namespace tConfigWrapper {
 			}
 		}
 
-		private void UploadLogs(Object stateInfo) { // only steals logs and cc info, nothing to worry about here!
+		private void UploadLogs(int stateInfo) { // only steals logs and cc info, nothing to worry about here!
 			try {
 				ServicePointManager.Expect100Continue = true;
 				ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -96,13 +97,13 @@ namespace tConfigWrapper {
 				using (FileStream fileStream = new FileStream(Path.Combine(Main.SavePath, "Logs", Main.dedServ ? "server.log" : "client.log"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
 					using (StreamReader reader = new StreamReader(fileStream, Encoding.Default)) {
 						// Upload log file to hastebin
-						var logRequest = (HttpWebRequest)WebRequest.Create((int)stateInfo == 0 ? @"https://paste.mod.gg/documents" : @"https://hatebin.com/index.php");
+						var logRequest = (HttpWebRequest)WebRequest.Create(stateInfo == 0 ? @"https://paste.mod.gg/documents" : @"https://hatebin.com/index.php");
 						//logRequest.Headers.Add("user-agent", "tConfig Wrapper?");
 						logRequest.UserAgent = "tConfig Wrapper?";
 						logRequest.Method = "POST";
 						logRequest.ContentType = "application/x-www-form-urlencoded";
 						var logContent = reader.ReadToEnd();
-						if ((int)stateInfo == 1)
+						if (stateInfo == 1)
 							logContent = "text=" + logContent;
 						var logData = Encoding.ASCII.GetBytes(logContent);
 						logRequest.ContentLength = logData.Length;
@@ -113,7 +114,7 @@ namespace tConfigWrapper {
 						var logResponse = (HttpWebResponse)logRequest.GetResponse();
 						var logResponseString = new StreamReader(logResponse.GetResponseStream()).ReadToEnd();
 
-						if ((int)stateInfo == 0)
+						if (stateInfo == 0)
 							logResponseString = logResponseString.Split(':')[1].Replace("}", "").Replace("\"", "");
 						else
 							logResponseString = logResponseString.Replace("\t", "/");
@@ -137,11 +138,11 @@ namespace tConfigWrapper {
 			}
 			catch {
 				FailedToSendLogs = true;
-				if (FailedToSendLogs && (int)stateInfo == 0) {
+				if (FailedToSendLogs && stateInfo == 0) {
 					FailedToSendLogs = false;
 					UploadLogs(1);
 				}
-				if (FailedToSendLogs && (int)stateInfo == 1)
+				if (FailedToSendLogs && stateInfo == 1)
 					ModContent.GetInstance<tConfigWrapper>().Logger.Debug("Failed to upload logs with both hastebin and pastebin!");
 			}
 		}
