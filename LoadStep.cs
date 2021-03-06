@@ -1,12 +1,9 @@
 ﻿using Gajatko.IniFiles;
 using Mono.Cecil;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using SevenZip;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -16,17 +13,14 @@ using tConfigWrapper.Common;
 using tConfigWrapper.Common.DataTemplates;
 using tConfigWrapper.Loaders;
 using static tConfigWrapper.Common.Utilities;
-using Terraria;
-using Terraria.Audio;
 using Terraria.ID;
-using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper {
 	public static class LoadStep {
-		public static Action<string> LoadProgressText; // Heading text during loading
-		public static Action<float> LoadProgress; // Progress bar during loading: 0-1 scale
-		public static Action<string> LoadSubProgressText; // Subtext during loading
+		private static Action<string> _loadProgressText; // Heading text during loading
+		private static Action<float> _loadProgress; // Progress bar during loading: 0-1 scale
+		private static Action<string> _loadSubProgressText; // Subtext during loading
 		public static int TaskCompletedCount; // Int used for tracking load progress during content loading
 		internal static ConcurrentDictionary<int, ItemInfo> globalItemInfos = new ConcurrentDictionary<int, ItemInfo>(); // Dictionaries are selfexplanatory, concurrent so that multiple threads can access them without dying
 		internal static ConcurrentDictionary<string, IniFileSection> recipeDict = new ConcurrentDictionary<string, IniFileSection>();
@@ -34,7 +28,7 @@ namespace tConfigWrapper {
 		internal static ConcurrentDictionary<string, MemoryStream> streamsGlobal = new ConcurrentDictionary<string, MemoryStream>();
 		internal static string CurrentLoadingMod;
 
-		internal static Mod mod => ModContent.GetInstance<tConfigWrapper>();
+		internal static Mod Mod => ModContent.GetInstance<tConfigWrapper>();
 
 		public static void Setup() {
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
@@ -47,16 +41,16 @@ namespace tConfigWrapper {
 			PropertyInfo ProgressProperty = UILoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
 			PropertyInfo SubProgressTextProperty = UILoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
 
-			LoadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
-			LoadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
-			LoadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
+			_loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
+			_loadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
+			_loadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
 
-			LoadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
-			LoadProgress?.Invoke(0f);
+			_loadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
+			_loadProgress?.Invoke(0f);
 
 			foreach (var modName in ModState.AllMods) {
 				if (ModState.EnabledMods.Contains(Path.GetFileNameWithoutExtension(modName)))
-					mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
+					Mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
 			}
 
 			for (int i = 0; i < ModState.EnabledMods.Count; i++) {
@@ -65,10 +59,10 @@ namespace tConfigWrapper {
 				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
 				CurrentLoadingMod = currentModNoExt;
 
-				LoadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
-				mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
+				_loadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
+				Mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
 				using (SevenZipExtractor extractor = new SevenZipExtractor(currentMod)) {
-					mod.Logger.Debug($"Loading Content: {currentModNoExt}");
+					Mod.Logger.Debug($"Loading Content: {currentModNoExt}");
 
 					ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
 					Decompressor.DecompressMod(currentMod, streams); // Decompresses mods since .obj files are literally just 7z files
@@ -107,15 +101,15 @@ namespace tConfigWrapper {
 			}
 
 			//Reset progress bar
-			LoadSubProgressText?.Invoke("");
-			LoadProgressText?.Invoke("Loading mod");
-			LoadProgress?.Invoke(0f);
+			_loadSubProgressText?.Invoke("");
+			_loadProgressText?.Invoke("Loading mod");
+			_loadProgress?.Invoke(0f);
 			CurrentLoadingMod = null;
 		}
 
 		private static IEnumerable<BaseLoader> GetLoaders(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) {
 			Type baseType = typeof(BaseLoader);
-			var childTypes = mod.Code.GetTypes().Where(p => baseType.IsAssignableFrom(p) && !p.IsAbstract);
+			var childTypes = Mod.Code.GetTypes().Where(p => baseType.IsAssignableFrom(p) && !p.IsAbstract);
 
 			foreach (Type childType in childTypes) {
 				yield return (BaseLoader)Activator.CreateInstance(childType, modName, fileStreams);
@@ -160,8 +154,8 @@ namespace tConfigWrapper {
 		}
 
 		public static void SetupRecipes() { // Sets up recipes, what were you expecting?
-			LoadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
-			LoadProgress.Invoke(0f);
+			_loadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
+			_loadProgress.Invoke(0f);
 			int progressCount = 0;
 			bool initialized = (bool)Assembly.GetAssembly(typeof(Mod)).GetType("Terraria.ModLoader.MapLoader").GetField("initialized", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null); // Check if the map is already initialized
 			foreach (var iniFileSection in recipeDict) { // Load every recipe in the recipe dict
@@ -169,7 +163,7 @@ namespace tConfigWrapper {
 				string modName = iniFileSection.Key.Split(':')[0];
 				ModRecipe recipe = null;
 				if (initialized) // Only make the recipe if the maps have already been initialized. The checks for initialized are because I run this method in GetTileMapEntires() to see what tiles are used in recipes and need to have a name in their map entry
-					recipe = new ModRecipe(mod);
+					recipe = new ModRecipe(Mod);
 				foreach (var element in iniFileSection.Value.elements) { // ini recipe loading, code is readable enough.
 					string[] splitElement = element.Content.Split('=');
 					string key = splitElement[0];
@@ -182,7 +176,7 @@ namespace tConfigWrapper {
 							if ((id = ItemID.FromLegacyName(itemName, 4)) != 0)
 								recipe?.SetResult(id, int.Parse(value));
 							else
-								recipe?.SetResult(mod, iniFileSection.Key, int.Parse(value));
+								recipe?.SetResult(Mod, iniFileSection.Key, int.Parse(value));
 							break;
 						}
 						case "needWater" when initialized:
@@ -193,7 +187,7 @@ namespace tConfigWrapper {
 								var recipeItemInfo = recipeItem.Split(null, 2);
 								int amount = int.Parse(recipeItemInfo[0]);
 
-								int itemID = mod.ItemType($"{modName}:{recipeItemInfo[1].RemoveIllegalCharacters()}");
+								int itemID = Mod.ItemType($"{modName}:{recipeItemInfo[1].RemoveIllegalCharacters()}");
 								if (itemID == 0)
 									itemID = ItemID.FromLegacyName(recipeItemInfo[1], 4);
 
@@ -202,7 +196,7 @@ namespace tConfigWrapper {
 								if (numberIngredients < 14)
 									recipe?.AddIngredient(itemID, amount);
 								else {
-									mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
+									Mod.Logger.Debug($"The following item has exceeded the max ingredient limit! -> {iniFileSection.Key}");
 									tConfigWrapper.ReportErrors = true;
 								}
 							}
@@ -211,11 +205,11 @@ namespace tConfigWrapper {
 						case "Tiles": { // Does stuff to check for modtiles and vanilla tiles that have changed their name since 1.1.2
 							foreach (string recipeTile in value.Split(',')) {
 								string recipeTileIR = recipeTile.RemoveIllegalCharacters();
-								int tileInt = mod.TileType($"{modName}:{recipeTileIR}");
-								var tileModTile = mod.GetTile($"{modName}:{recipeTileIR}");
+								int tileInt = Mod.TileType($"{modName}:{recipeTileIR}");
+								var tileModTile = Mod.GetTile($"{modName}:{recipeTileIR}");
 								if (!TileID.Search.ContainsName(recipeTileIR) && !CheckIDConversion(recipeTileIR) && tileInt == 0 && tileModTile == null) { // Would love to replace this with Utilities.StringToContent() but this one is special and needs to add stuff to a dictionary so I can't
 									if (initialized) {
-										mod.Logger.Debug($"TileID {modName}:{recipeTileIR} does not exist"); // We will have to manually convert anything that breaks lmao
+										Mod.Logger.Debug($"TileID {modName}:{recipeTileIR} does not exist"); // We will have to manually convert anything that breaks lmao
 										tConfigWrapper.ReportErrors = true;
 									}
 								}
@@ -227,7 +221,7 @@ namespace tConfigWrapper {
 								else if (tileInt != 0) {
 									if (initialized) {
 										recipe?.AddTile(tileModTile);
-										mod.Logger.Debug($"{modName}:{recipeTileIR} added to recipe through mod.TileType!");
+										Mod.Logger.Debug($"{modName}:{recipeTileIR} added to recipe through mod.TileType!");
 									}
 									//else {
 									//	tileMapData[tileModTile] = (true, tileMapData[tileModTile].Item2); // I do this because either I can't just change Item1 directly to true OR because I am very not smart and couldn't figure out how to set it individually.
@@ -242,17 +236,17 @@ namespace tConfigWrapper {
 				if (recipe?.createItem != null && recipe?.createItem.type != ItemID.None && initialized)
 					recipe?.AddRecipe();
 				if (initialized)
-					LoadProgress.Invoke(progressCount / recipeDict.Count);
+					_loadProgress.Invoke(progressCount / recipeDict.Count);
 			}
 		}
 
 		// TODO: Move this method
 		public static void UpdateSubProgressText(string newText) {
-			LoadSubProgressText?.Invoke(newText);
+			_loadSubProgressText?.Invoke(newText);
 		}
 
 		public static void UpdateProgress(float newProgress) {
-			LoadProgress?.Invoke(newProgress);
+			_loadProgress?.Invoke(newProgress);
 		}
 
 		internal static void LoadStaticFields() {
@@ -262,9 +256,9 @@ namespace tConfigWrapper {
 		}
 
 		internal static void UnloadStaticFields() {
-			LoadProgressText = null;
-			LoadProgress = null; 
-			LoadSubProgressText = null;
+			_loadProgressText = null;
+			_loadProgress = null; 
+			_loadSubProgressText = null;
 			globalItemInfos = null;
 			recipeDict = null;
 			suffixes = null;
