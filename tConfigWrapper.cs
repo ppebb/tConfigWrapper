@@ -48,11 +48,11 @@ namespace tConfigWrapper {
 		}
 
 		public override void AddRecipes() {
-			LoadStep.SetupRecipes();
+			LoadStep.AddRecipes();
 		}
 
 		public override void PostSetupContent() {
-			LoadStep.GetMapEntries();
+			LoadStep.PostSetupContent();
 		}
 
 		public override void PostAddRecipes() {
