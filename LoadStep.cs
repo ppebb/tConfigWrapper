@@ -1,6 +1,5 @@
 ﻿using Gajatko.IniFiles;
 using Mono.Cecil;
-using SevenZip;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -34,16 +33,18 @@ namespace tConfigWrapper {
 			recipeDict.TryGetValue("", out _); // Sanity check to make sure it's initialized
 			// Cringe reflection
 			Assembly assembly = Assembly.GetAssembly(typeof(Mod));
-			Type UILoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
+			Type uiLoadModsType = assembly.GetType("Terraria.ModLoader.UI.UILoadMods");
 
-			object loadModsValue = assembly.GetType("Terraria.ModLoader.UI.Interface").GetField("loadMods", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-			MethodInfo LoadStageMethod = UILoadModsType.GetMethod("SetLoadStage", BindingFlags.Instance | BindingFlags.Public);
-			PropertyInfo ProgressProperty = UILoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
-			PropertyInfo SubProgressTextProperty = UILoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
+			object loadModsValue = assembly.GetType("Terraria.ModLoader.UI.Interface")
+				.GetField("loadMods", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+			MethodInfo loadStageMethod = uiLoadModsType.GetMethod("SetLoadStage", BindingFlags.Instance | BindingFlags.Public);
+			PropertyInfo progressProperty = uiLoadModsType.GetProperty("Progress", BindingFlags.Instance | BindingFlags.Public);
+			PropertyInfo subProgressTextProperty =
+				uiLoadModsType.GetProperty("SubProgressText", BindingFlags.Instance | BindingFlags.Public);
 
-			_loadProgressText = (string s) => LoadStageMethod.Invoke(loadModsValue, new object[] { s, -1 });
-			_loadProgress = (float f) => ProgressProperty.SetValue(loadModsValue, f);
-			_loadSubProgressText = (string s) => SubProgressTextProperty.SetValue(loadModsValue, s);
+			_loadProgressText = (string s) => loadStageMethod.Invoke(loadModsValue, new object[] {s, -1});
+			_loadProgress = (float f) => progressProperty.SetValue(loadModsValue, f);
+			_loadSubProgressText = (string s) => subProgressTextProperty.SetValue(loadModsValue, s);
 
 			_loadProgressText?.Invoke("tConfig Wrapper: Loading Mods");
 			_loadProgress?.Invoke(0f);
@@ -59,44 +60,43 @@ namespace tConfigWrapper {
 				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
 				CurrentLoadingMod = currentModNoExt;
 
-				_loadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
+				_loadProgressText?.Invoke(
+					$"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
 				Mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
-				using (SevenZipExtractor extractor = new SevenZipExtractor(currentMod)) {
-					Mod.Logger.Debug($"Loading Content: {currentModNoExt}");
+				Mod.Logger.Debug($"Loading Content: {currentModNoExt}");
 
-					ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
-					Decompressor.DecompressMod(currentMod, streams); // Decompresses mods since .obj files are literally just 7z files
+				ConcurrentDictionary<string, MemoryStream> streams = new ConcurrentDictionary<string, MemoryStream>();
+				Decompressor.DecompressMod(currentMod, streams); // Decompresses mods since .obj files are literally just 7z files
 
-					streamsGlobal.Clear();
-					streamsGlobal = streams;
-					TaskCompletedCount = 0;
+				streamsGlobal.Clear();
+				streamsGlobal = streams;
+				TaskCompletedCount = 0;
 
-					// Get the first stream that is an obj file
-					var obj = streams.First(s => s.Key.EndsWith(".obj"));
-					BinaryReader reader = new BinaryReader(obj.Value);
+				// Get the first stream that is an obj file
+				var obj = streams.First(s => s.Key.EndsWith(".obj"));
+				BinaryReader reader = new BinaryReader(obj.Value);
 
-					// Create an Obj Loader and load the obj
-					var loader = new ObjLoader(reader, currentModNoExt);
-					loader.LoadObj(); // This was causing errors for some reason.
+				// Create an Obj Loader and load the obj
+				var loader = new ObjLoader(reader, currentModNoExt);
+				loader.LoadObj(); // This was causing errors for some reason.
 
-					// Get all classes that extend BaseLoader and make an instance of them
-					var loaderInstances = GetLoaders(currentModNoExt, streams).ToArray();
-					int contentCount = 0;
-					List<Task> loadTasks = new List<Task>();
+				// Get all classes that extend BaseLoader and make an instance of them
+				var loaderInstances = GetLoaders(currentModNoExt, streams).ToArray();
+				int contentCount = 0;
+				List<Task> loadTasks = new List<Task>();
 
-					// Call AddFiles for all loaders and add to the content amount
-					CallMethodAsync(loaderInstances, baseLoader => baseLoader.AddFiles(streams.Keys));
+				// Call AddFiles for all loaders and add to the content amount
+				CallMethodAsync(loaderInstances, baseLoader => baseLoader.AddFiles(streams.Keys));
 
-					//// Make a task for each loader and call IterateFiles
-					CallMethodAsync(loaderInstances, baseLoader => baseLoader.IterateFiles(contentCount));
+				//// Make a task for each loader and call IterateFiles
+				CallMethodAsync(loaderInstances, baseLoader => baseLoader.IterateFiles(contentCount));
 
-					// Call RegisterContent for each loader
-					CallMethodAsync(loaderInstances, baseLoader => baseLoader.RegisterContent());
+				// Call RegisterContent for each loader
+				CallMethodAsync(loaderInstances, baseLoader => baseLoader.RegisterContent());
 
-					// Dispose the streams
-					foreach (var memoryStream in streams) {
-						memoryStream.Value.Dispose();
-					}
+				// Dispose the streams
+				foreach (var memoryStream in streams) {
+					memoryStream.Value.Dispose();
 				}
 			}
 
@@ -153,7 +153,7 @@ namespace tConfigWrapper {
 			finished.Signal();
 		}
 
-		public static void SetupRecipes() { // Sets up recipes, what were you expecting?
+		private static void SetupRecipes() { // Sets up recipes, what were you expecting?
 			_loadProgressText.Invoke("tConfig Wrapper: Adding Recipes"); // Ah yes, more reflection
 			_loadProgress.Invoke(0f);
 			int progressCount = 0;
