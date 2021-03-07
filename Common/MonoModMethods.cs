@@ -1,6 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
 using ReLogic.Graphics;
-using tConfigWrapper.Common;
 using Terraria;
 using Terraria.ModLoader;
 
@@ -51,7 +50,6 @@ namespace tConfigWrapper {
 					string suffixed = self.Name.Replace($"{prefix.DisplayName.GetDefault()} ", "") + $" {prefix.DisplayName.GetDefault()}";
 					return suffixed;
 				}
-				continue;
 			}
 			return orig(self);
 		}

@@ -86,7 +86,7 @@ namespace tConfigWrapper {
 				List<Task> loadTasks = new List<Task>();
 
 				// Call AddFiles for all loaders and add to the content amount
-				CallMethodAsync(loaderInstances, baseLoader => baseLoader.AddFiles(streams.Keys));
+				CallMethodAsync(loaderInstances, baseLoader => contentCount += baseLoader.AddFiles(streams.Keys));
 
 				//// Make a task for each loader and call IterateFiles
 				CallMethodAsync(loaderInstances, baseLoader => baseLoader.IterateFiles(contentCount));

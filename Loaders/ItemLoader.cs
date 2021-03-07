@@ -4,7 +4,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Threading;
 using tConfigWrapper.Common;
 using tConfigWrapper.Common.DataTemplates;
 using Terraria;
@@ -14,11 +13,11 @@ using Terraria.ModLoader;
 
 namespace tConfigWrapper.Loaders {
 	internal class ItemLoader : BaseLoader {
-		private Dictionary<string, ModItem> itemsToLoad = new Dictionary<string, ModItem>();
+		private readonly Dictionary<string, ModItem> _itemsToLoad = new Dictionary<string, ModItem>();
 
 		public ItemLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "Item";
+		protected override string TargetFolder => "Item";
 
 		protected override void HandleFile(string file) {
 			MemoryStream iniStream = fileStreams[file];
@@ -131,12 +130,12 @@ namespace tConfigWrapper.Loaders {
 				return;
 			}
 
-			itemsToLoad.Add(internalName, new BaseItem((ItemInfo)info, internalName, itemName, createTile, shoot, createWall, toolTip, itemTexture));
+			_itemsToLoad.Add(internalName, new BaseItem((ItemInfo)info, internalName, itemName, createTile, shoot, createWall, toolTip, itemTexture));
 			reader.Dispose();
 		}
 
 		public override void RegisterContent() {
-			foreach (var (name, modItem) in itemsToLoad) {
+			foreach (var (name, modItem) in _itemsToLoad) {
 				Mod.AddItem(name, modItem);
 			}
 		}

@@ -18,7 +18,7 @@ namespace tConfigWrapper.Common {
 		/// </summary>
 		/// <param name="str"></param>
 		/// <returns></returns>
-		public static string RemoveIllegalCharacters(this String str) {
+		public static string RemoveIllegalCharacters(this string str) {
 			if (str != null)
 				return str.Replace(" ", "").Replace("'", "");
 			else
@@ -175,7 +175,6 @@ namespace tConfigWrapper.Common {
 		/// <summary>
 		/// Returns an int from a content string. Returns 0 if it fails.
 		/// </summary>
-		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
 		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID number passing it in with {modName} in front will still work fine. String should contain no illegal characters</param>

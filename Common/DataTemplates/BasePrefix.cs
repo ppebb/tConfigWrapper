@@ -1,8 +1,6 @@
 ﻿using Terraria;
 using Terraria.ModLoader;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Reflection;
 
 namespace tConfigWrapper.Common.DataTemplates {
 	public class BasePrefix : ModPrefix {

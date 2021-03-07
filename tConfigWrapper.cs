@@ -4,7 +4,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Text;
-using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using tConfigWrapper.Common;
@@ -118,7 +117,7 @@ namespace tConfigWrapper {
 							logResponseString = logResponseString.Split(':')[1].Replace("}", "").Replace("\"", "");
 						else
 							logResponseString = logResponseString.Replace("\t", "/");
-						logResponseString = (int)stateInfo == 0 ? $"https://paste.mod.gg/{logResponseString}" : $"https://hatebin.com{logResponseString}";
+						logResponseString = stateInfo == 0 ? $"https://paste.mod.gg/{logResponseString}" : $"https://hatebin.com{logResponseString}";
 
 						// Send link to discord via a webhook
 						var discordRequest = (HttpWebRequest)WebRequest.Create(Telemetry.WebhookURL); // Note that the URL has been changed from previous commits, so don't waste your time trying to send NSFW to the webhook.

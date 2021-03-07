@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Reflection;
-using System.Threading;
 using tConfigWrapper.Common;
 using tConfigWrapper.Common.DataTemplates;
 using Terraria;
@@ -19,7 +18,7 @@ namespace tConfigWrapper.Loaders {
 
 		public NPCLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "NPC";
+		protected override string TargetFolder => "NPC";
 
 		protected override void HandleFile(string file) {
 			List<(int, int?, string, float)> dropList = new List<(int, int?, string, float)>();
@@ -81,7 +80,7 @@ namespace tConfigWrapper.Loaders {
 					}
 					case "Buff Immunities": {
 						var splitElement = element.Content.Split('=');
-						splitElement[0].Replace(" ", "").Replace("!", "");
+						splitElement[0] = splitElement[0].Replace(" ", "").Replace("!", "");
 
 						FieldInfo npcInfoImmunity = typeof(NpcInfo).GetField("buffImmune");
 						if (BuffID.Search.ContainsName(splitElement[0])) {

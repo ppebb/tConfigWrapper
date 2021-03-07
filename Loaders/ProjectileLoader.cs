@@ -15,7 +15,7 @@ namespace tConfigWrapper.Loaders {
 
 		public ProjectileLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "Projectile";
+		protected override string TargetFolder => "Projectile";
 
 		protected override void HandleFile(string file) {
 			MemoryStream iniStream = fileStreams[file];

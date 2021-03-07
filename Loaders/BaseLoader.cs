@@ -1,12 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper.Loaders {
 	internal abstract class BaseLoader {
-		public abstract string TargetFolder { get; }
+		protected abstract string TargetFolder { get; }
 
 		protected readonly string modName;
 		protected readonly List<string> files = new List<string>();
@@ -62,13 +61,13 @@ namespace tConfigWrapper.Loaders {
 
 		/// <summary>
 		/// Ran when <see cref="Terraria.ModLoader.Mod.PostSetupContent"/> is called.
-		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> will be null
+		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> are null when this method is called
 		/// </summary>
 		public virtual void PostSetupContent() { }
 
 		/// <summary>
 		/// Ran when <see cref="Terraria.ModLoader.Mod.AddRecipes"/> is called.
-		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> will be null
+		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> are null when this method is called
 		/// </summary>
 		public virtual void AddRecipes() { }
 	}

@@ -18,7 +18,7 @@ namespace tConfigWrapper.Loaders {
 
 		public WallLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "Wall";
+		protected override string TargetFolder => "Wall";
 
 		protected override void HandleFile(string file) {
 			MemoryStream iniStream = fileStreams[file];

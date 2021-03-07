@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Runtime.Serialization;
 using tConfigWrapper.Common;
 using tConfigWrapper.Common.DataTemplates;
 using Terraria.ModLoader;

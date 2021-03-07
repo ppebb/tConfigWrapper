@@ -1,5 +1,4 @@
 ﻿using Gajatko.IniFiles;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -13,7 +12,7 @@ namespace tConfigWrapper.Loaders {
 
 		public PrefixLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "Prefix";
+		protected override string TargetFolder => "Prefix";
 
 		protected override void HandleFile(string file) {
 			MemoryStream iniStream = fileStreams[file];

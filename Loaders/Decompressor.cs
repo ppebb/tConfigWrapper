@@ -4,14 +4,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Terraria.ModLoader;
 
 namespace tConfigWrapper.Loaders {
-	internal class Decompressor {
-		private static int _decompressTasksCompleted = 0; // Total number of items decompressed
-		private static int _decompressTotalFiles = 0; // Total number of items that need to be decompressed
+	internal static class Decompressor {
+		private static int _decompressTasksCompleted; // Total number of items decompressed
+		private static int _decompressTotalFiles; // Total number of items that need to be decompressed
 
 		internal static void DecompressMod(string objPath, ConcurrentDictionary<string, MemoryStream> streams) {
 			LoadStep.UpdateSubProgressText("Decompressing");

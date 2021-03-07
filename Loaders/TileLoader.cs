@@ -21,7 +21,7 @@ namespace tConfigWrapper.Loaders {
 
 		public TileLoader(string modName, ConcurrentDictionary<string, MemoryStream> fileStreams) : base(modName, fileStreams) { }
 
-		public override string TargetFolder => "Tile";
+		protected override string TargetFolder => "Tile";
 
 		protected override void HandleFile(string file) {
 			Dictionary<string, int> tileNumberFields = new Dictionary<string, int>();
