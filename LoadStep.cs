@@ -83,10 +83,12 @@ namespace tConfigWrapper {
 				// Get all classes that extend BaseLoader and make an instance of them
 				var loaderInstances = GetLoaders(currentModNoExt, streams).ToArray();
 				int contentCount = 0;
-				List<Task> loadTasks = new List<Task>();
-
+				
 				// Call AddFiles for all loaders and add to the content amount
-				CallMethodAsync(loaderInstances, baseLoader => contentCount += baseLoader.AddFiles(streams.Keys));
+				CallMethodAsync(loaderInstances, baseLoader => {
+					int addedFiles = baseLoader.AddFiles(streams.Keys);
+					Interlocked.Add(ref contentCount, addedFiles);
+				});
 
 				//// Make a task for each loader and call IterateFiles
 				CallMethodAsync(loaderInstances, baseLoader => baseLoader.IterateFiles(contentCount));
@@ -120,10 +122,11 @@ namespace tConfigWrapper {
 		/// Calls <paramref name="method"/> for every T in <paramref name="objects"/>
 		/// </summary>
 		private static void CallMethodAsync<T>(IEnumerable<T> objects, Action<T> method) {
-			List<Task> tasks = new List<Task>();
+			var objArr = objects.ToArray();
+			List<Task> tasks = new List<Task>(objArr.Length);
 
 			// Make a task and run method for every thing in objects 
-			foreach (T thing in objects) {
+			foreach (T thing in objArr) {
 				tasks.Add(Task.Run(() => method.Invoke(thing)));
 			}
 
@@ -132,7 +135,7 @@ namespace tConfigWrapper {
 		}
 
 		internal static void AddRecipes() {
-			LoadStep.SetupRecipes();
+			SetupRecipes();
 
 			var loaders = GetLoaders(null, null);
 			CallMethodAsync(loaders, loader => loader.AddRecipes());
