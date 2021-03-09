@@ -18,7 +18,7 @@ namespace tConfigWrapper.Common {
 		/// </summary>
 		/// <param name="str"></param>
 		/// <returns></returns>
-		public static string RemoveIllegalCharacters(this String str) {
+		public static string RemoveIllegalCharacters(this string str) {
 			if (str != null)
 				return str.Replace(" ", "").Replace("'", "");
 			else
@@ -175,7 +175,6 @@ namespace tConfigWrapper.Common {
 		/// <summary>
 		/// Returns an int from a content string. Returns 0 if it fails.
 		/// </summary>
-		/// <param name="mod"></param>
 		/// <param name="contentIDType">An ID class as a string, such as ItemID, TileID, or NPCID</param>
 		/// <param name="modContentMethod">The mod.XType method you want to use, such as ItemType, TileType, or NPCType</param>
 		/// <param name="contentString">Should be the internal name of the content, if it is a vanilla ID number passing it in with {modName} in front will still work fine. String should contain no illegal characters</param>
@@ -183,14 +182,14 @@ namespace tConfigWrapper.Common {
 		internal static int StringToContent(string contentIDType, string modContentMethod, string contentString) {
 			if (contentString == null)
 				return 0; // I have to add this because yes
-			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(LoadStep.mod, new object[] { contentString }); // Is mod.XType
+			int contentInt = (int)typeof(Mod).GetMethod(modContentMethod, new Type[] { typeof(string) }).Invoke(LoadStep.Mod, new object[] { contentString }); // Is mod.XType
 			if (!searchDict.ContainsKey(contentIDType)) {
 				object search = typeof(Main).Assembly.GetType($"Terraria.ID.{contentIDType}").GetField("Search", BindingFlags.Static | BindingFlags.Public).GetValue(null);
 				searchDict.TryAdd(contentIDType, search);
 			}
 			string contentStringNoMod = contentString.Split(':')[1]; // Takes something like Avalon:DarkShard which is actually vanilla and makes it vanilla
 			if (!CheckIDConversion(contentStringNoMod) && contentInt == 0 && (bool)containsName.Invoke(searchDict[contentIDType], new object[] { contentStringNoMod }) && int.TryParse(contentStringNoMod, out int _)) { // Checks that the ID isn't a vanilla ID (1.3 or 1.1.2 variant) or an existing modded content
-				LoadStep.mod.Logger.Debug($"{contentStringNoMod} used by {contentString.Split(':')[0]} does not exist!");
+				LoadStep.Mod.Logger.Debug($"{contentStringNoMod} used by {contentString.Split(':')[0]} does not exist!");
 				tConfigWrapper.ReportErrors = true;
 			}
 			else if (int.TryParse(contentStringNoMod, out int result)) // Returns the parsed string if the string is just a straight number
@@ -202,7 +201,7 @@ namespace tConfigWrapper.Common {
 			else if (contentInt != 0) // Returns if the content is modded
 				return contentInt;
 			else {
-				LoadStep.mod.Logger.Debug("How was this even triggered");
+				LoadStep.Mod.Logger.Debug("How was this even triggered");
 				tConfigWrapper.ReportErrors = true;
 				return 0;
 			}

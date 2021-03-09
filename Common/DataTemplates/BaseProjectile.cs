@@ -47,8 +47,7 @@ namespace tConfigWrapper.Common.DataTemplates {
 				var infoFieldValue = field.GetValue(_info);
 				var projectileField = typeof(Projectile).GetField(field.Name);
 
-				if (infoFields != null)
-					projectileField.SetValue(projectile, infoFieldValue);
+				projectileField.SetValue(projectile, infoFieldValue);
 			}
 		}
 	}

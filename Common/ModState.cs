@@ -25,19 +25,17 @@ namespace tConfigWrapper.Common {
 		public static void EnableMod(string modName) {
 			if (EnabledMods.Contains(modName))
 				return;
-			else {
-				EnabledMods.Add(modName);
-				SerializeEnabledMods();
-			}
+
+			EnabledMods.Add(modName);
+			SerializeEnabledMods();
 		}
 
 		public static void DisableMod(string modName) {
 			if (!EnabledMods.Contains(modName))
 				return;
-			else {
-				EnabledMods.Remove(modName);
-				SerializeEnabledMods();
-			}
+			
+			EnabledMods.Remove(modName);
+			SerializeEnabledMods();
 		}
 
 		public static void ToggleMod(string modName) {
