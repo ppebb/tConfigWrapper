@@ -94,5 +94,7 @@ namespace tConfigWrapper.Loaders {
 
 			_wallData = null;
 		}
+
+		public override void InitStatic() => _wallData = new Dictionary<string, ModWall>();
 	}
 }

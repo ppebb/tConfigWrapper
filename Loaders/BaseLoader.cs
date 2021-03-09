@@ -60,15 +60,20 @@ namespace tConfigWrapper.Loaders {
 		public abstract void RegisterContent();
 
 		/// <summary>
-		/// Ran when <see cref="Terraria.ModLoader.Mod.PostSetupContent"/> is called.
+		/// Ran when <see cref="Mod.PostSetupContent"/> is called.
 		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> are null when this method is called
 		/// </summary>
 		public virtual void PostSetupContent() { }
 
 		/// <summary>
-		/// Ran when <see cref="Terraria.ModLoader.Mod.AddRecipes"/> is called.
+		/// Ran when <see cref="Mod.AddRecipes"/> is called.
 		/// <see cref="fileStreams"/>, <see cref="files"/> and <see cref="modName"/> are null when this method is called
 		/// </summary>
 		public virtual void AddRecipes() { }
+
+		/// <summary>
+		///  Called on <see cref="Mod.Load"/> to initialize static varibles
+		/// </summary>
+		public virtual void InitStatic() { }
 	}
 }

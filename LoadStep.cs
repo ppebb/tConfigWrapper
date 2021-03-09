@@ -165,9 +165,9 @@ namespace tConfigWrapper {
 				progressCount++; // Count the number of recipes, still broken somehow :(
 				string modName = iniFileSection.Key.Split(':')[0];
 				ModRecipe recipe = null;
-				if (initialized) // Only make the recipe if the maps have already been initialized. The checks for initialized are because I run this method in GetTileMapEntires() to see what tiles are used in recipes and need to have a name in their map entry
+				if (initialized) // Only make the recipe if the maps have already been initialized. The checks for initialized are because this method is run in GetTileMapEntires() to see what tiles are used in recipes and need to have a name in their map entry
 					recipe = new ModRecipe(Mod);
-				foreach (var element in iniFileSection.Value.elements) { // ini recipe loading, code is readable enough.
+				foreach (var element in iniFileSection.Value.elements) { // ini recipe loading, code is barely readable enough.
 					string[] splitElement = element.Content.Split('=');
 					string key = splitElement[0];
 					string value = splitElement[1];
@@ -256,6 +256,8 @@ namespace tConfigWrapper {
 			globalItemInfos = new ConcurrentDictionary<int, ItemInfo>();
 			recipeDict = new ConcurrentDictionary<string, IniFileSection>();
 			suffixes = new ConcurrentBag<ModPrefix>();
+			var loaders = GetLoaders(null, null);
+			CallMethodAsync(loaders, loader => loader.InitStatic());
 		}
 
 		internal static void UnloadStaticFields() {

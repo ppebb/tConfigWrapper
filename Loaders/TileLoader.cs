@@ -15,7 +15,7 @@ using Terraria.ModLoader;
 
 namespace tConfigWrapper.Loaders {
 	internal class TileLoader : BaseLoader {
-		private static Dictionary<ModTile, (bool display, string name)> _tileMapData = new Dictionary<ModTile, (bool, string)>();
+		private static Dictionary<ModTile, (bool display, string name)> _tileData = new Dictionary<ModTile, (bool, string)>();
 
 		private readonly Dictionary<string, (ModTile tile, string texture)> _tilesToLoad = new Dictionary<string, (ModTile tile, string texture)>();
 
@@ -125,7 +125,7 @@ namespace tConfigWrapper.Loaders {
 			if (tileTexture != null) {
 				BaseTile baseTile = new BaseTile((TileInfo)info, internalName, tileTexture, tileBoolFields, tileNumberFields, tileStringFields);
 				_tilesToLoad.Add(internalName, (baseTile, "tConfigWrapper/Common/DataTemplates/MissingTexture"));
-				_tileMapData.Add(baseTile, (oreTile, displayName));
+				_tileData.Add(baseTile, (oreTile, displayName));
 			}
 
 			if (logTileAndModName)
@@ -141,7 +141,7 @@ namespace tConfigWrapper.Loaders {
 		public override void PostSetupContent() {
 			UpdateDisplayMap();
 
-			foreach (var (modTile, (display, name)) in _tileMapData) {
+			foreach (var (modTile, (display, name)) in _tileData) {
 				Texture2D tileTex = Main.tileTexture[modTile.Type];
 				Color[] colors = new Color[tileTex.Width * tileTex.Height];
 				tileTex.GetData(colors);
@@ -165,7 +165,7 @@ namespace tConfigWrapper.Loaders {
 					modTile.AddMapEntry(averageColor);
 			}
 
-			_tileMapData = null;
+			_tileData = null;
 		}
 
 		private void UpdateDisplayMap() {
@@ -193,9 +193,11 @@ namespace tConfigWrapper.Loaders {
 					if (tileInt == 0)
 						continue;
 
-					_tileMapData[tileModTile] = (true, _tileMapData[tileModTile].name);
+					_tileData[tileModTile] = (true, _tileData[tileModTile].name);
 				}
 			}
 		}
+
+		public override void InitStatic() => _tileData = new Dictionary<ModTile, (bool display, string name)>();
 	}
 }
