@@ -27,13 +27,13 @@ namespace tConfigWrapper {
 		public static string GithubProjectName => "tConfigWrapper";
 
 		public override void Load() {
+			Directory.CreateDirectory(ModsPath + "\\ModSettings");
+			Directory.CreateDirectory(ModsPath + "\\ModPacks");
+			Directory.CreateDirectory(ModsPath + "\\PatchedAssemblies");
+			//Loaders.AssemblyLoader.LoadAssembliesIntoCecil();
 			Utilities.LoadStaticFields();
 			ModState.GetAllMods();
 			ModState.DeserializeEnabledMods();
-			ModState.DeserializePrevPlayerMods();
-			ModState.DeserializePrevWorldMods();
-			Directory.CreateDirectory(ModsPath + "\\ModSettings");
-			Directory.CreateDirectory(ModsPath + "\\ModPacks");
 			LoadMethods();
 			tCFModMenu = new tConfigModMenu();
 			tCFModMenu.Activate();

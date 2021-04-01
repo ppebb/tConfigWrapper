@@ -1,5 +1,5 @@
 ﻿using Gajatko.IniFiles;
-using Mono.Cecil;
+using SevenZip;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -50,6 +50,11 @@ namespace tConfigWrapper {
 			_loadProgress?.Invoke(0f);
 
 			foreach (var modName in ModState.AllMods) {
+				//using (MemoryStream stream = new MemoryStream())
+				//using (SevenZipExtractor extractor = new SevenZipExtractor(stream)) {
+				//	extractor.ExtractFile("get the description, and the references, and anything else I need to get from a mod", stream);
+				//}
+
 				if (ModState.EnabledMods.Contains(Path.GetFileNameWithoutExtension(modName)))
 					Mod.Logger.Debug($"tConfig Mod: {Path.GetFileNameWithoutExtension(modName)} is enabled!"); // Writes all mod names to logs
 			}
@@ -60,8 +65,7 @@ namespace tConfigWrapper {
 				string currentModNoExt = Path.GetFileNameWithoutExtension(ModState.EnabledMods[i]);
 				CurrentLoadingMod = currentModNoExt;
 
-				_loadProgressText?.Invoke(
-					$"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
+				_loadProgressText?.Invoke($"tConfig Wrapper: Loading {currentModNoExt}"); // Sets heading text to display the mod being loaded
 				Mod.Logger.Debug($"Loading tConfig Mod: {currentModNoExt}"); // Logs the mod being loaded
 				Mod.Logger.Debug($"Loading Content: {currentModNoExt}");
 
@@ -83,7 +87,7 @@ namespace tConfigWrapper {
 				// Get all classes that extend BaseLoader and make an instance of them
 				var loaderInstances = GetLoaders(currentModNoExt, streams).ToArray();
 				int contentCount = 0;
-				
+
 				// Call AddFiles for all loaders and add to the content amount
 				CallMethodAsync(loaderInstances, baseLoader => {
 					int addedFiles = baseLoader.AddFiles(streams.Keys);
@@ -125,7 +129,7 @@ namespace tConfigWrapper {
 			var objArr = objects.ToArray();
 			List<Task> tasks = new List<Task>(objArr.Length);
 
-			// Make a task and run method for every thing in objects 
+			// Make a task and run method for every thing in objects
 			foreach (T thing in objArr) {
 				tasks.Add(Task.Run(() => method.Invoke(thing)));
 			}
@@ -144,16 +148,6 @@ namespace tConfigWrapper {
 		internal static void PostSetupContent() {
 			var loaders = GetLoaders(null, null);
 			CallMethodAsync(loaders, loader => loader.PostSetupContent());
-		}
-
-		public static void LoadAssembly(object stateInfo) {
-			object[] parameters = (object[])stateInfo;
-			CountdownEvent finished = (CountdownEvent)parameters[0];
-
-			ModuleDefinition module = AssemblyLoader.GetModule(Path.GetFileNameWithoutExtension((string)parameters[2]));
-			AssemblyLoader.FixIL((string)parameters[1], module);
-
-			finished.Signal();
 		}
 
 		private static void SetupRecipes() { // Sets up recipes, what were you expecting?
@@ -262,7 +256,7 @@ namespace tConfigWrapper {
 
 		internal static void UnloadStaticFields() {
 			_loadProgressText = null;
-			_loadProgress = null; 
+			_loadProgress = null;
 			_loadSubProgressText = null;
 			globalItemInfos = null;
 			recipeDict = null;

@@ -30,6 +30,19 @@ namespace tConfigWrapper {
 		//		HookEndpointManager.Remove<Hook_DisplayLoadError>(typeof(Mod).Assembly.GetType("Terraria.ModLoader.ModLoader").GetMethod("DisplayLoadError", BindingFlags.NonPublic | BindingFlags.Static), value);
 		//	}
 		//}
+
+		public delegate void Orig_Populate();
+		public delegate void Hook_Populate(Orig_Populate orig);
+
+		public static event Hook_Populate On_Populate {
+			add {
+				HookEndpointManager.Add<Hook_Populate>(typeof(Mod).Assembly.GetType("Terraria.Modloader.UI.UIMods").GetMethod("Populate", BindingFlags.NonPublic | BindingFlags.Instance), value);
+			}
+			remove {
+				HookEndpointManager.Remove<Hook_Populate>(typeof(Mod).Assembly.GetType("Terraria.Modloader.UI.UIMods").GetMethod("Populate", BindingFlags.NonPublic | BindingFlags.Instance), value);
+			}
+		}
+
 	}
 
 	public static class MenuUtils {

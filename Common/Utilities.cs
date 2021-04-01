@@ -153,7 +153,7 @@ namespace tConfigWrapper.Common {
 			containsName = typeof(IdDictionary).GetMethod("ContainsName");
 			getID = typeof(IdDictionary).GetMethod("GetId");
 			LoadStep.LoadStaticFields();
-			AssemblyLoader.LoadStaticFields();
+			//Loaders.AssemblyLoader.LoadStaticFields();
 			ModState.LoadStaticFields();
 		}
 
@@ -164,7 +164,7 @@ namespace tConfigWrapper.Common {
 			containsName = null;
 			getID = null;
 			LoadStep.UnloadStaticFields();
-			AssemblyLoader.UnloadStaticFields();
+			//Loaders.AssemblyLoader.UnloadStaticFields();
 			ModState.UnloadStaticFields();
 		}
 

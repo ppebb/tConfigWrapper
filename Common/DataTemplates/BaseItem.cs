@@ -73,9 +73,5 @@ namespace tConfigWrapper.Common.DataTemplates {
 					itemField.SetValue(item, infoFieldValue);
 			}
 		}
-
-		public override void MeleeEffects(Player player, Rectangle hitbox) {
-			AssemblyLoader.UseItemEffect[$"{_internalName.Split(':')[0]}:{_name}:UseItemEffect"].Invoke(player, hitbox);
-		}
 	}
 }

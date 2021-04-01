@@ -4,13 +4,10 @@ using System.IO;
 using System.Linq;
 using Terraria;
 using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
 using Terraria.World.Generation;
 
 namespace tConfigWrapper.Common {
-	public class PrevMods {
-		public HashSet<string> PrevEnabledMods;
-	}
-
 	public class ModState {
 		public static List<string> AllMods = new List<string>();
 		/// <summary>
@@ -19,8 +16,6 @@ namespace tConfigWrapper.Common {
 		public static List<string> EnabledMods = new List<string>();
 		public static List<string> EnabledModsOld;
 		public static List<string> ChangedMods = new List<string>();
-		public static Dictionary<string, PrevMods> PrevLoadedPlayerMods = new Dictionary<string, PrevMods>();
-		public static Dictionary<string, PrevMods> PrevLoadedWorldMods = new Dictionary<string, PrevMods>();
 
 		public static void EnableMod(string modName) {
 			if (EnabledMods.Contains(modName))
@@ -33,7 +28,7 @@ namespace tConfigWrapper.Common {
 		public static void DisableMod(string modName) {
 			if (!EnabledMods.Contains(modName))
 				return;
-			
+
 			EnabledMods.Remove(modName);
 			SerializeEnabledMods();
 		}
@@ -52,12 +47,7 @@ namespace tConfigWrapper.Common {
 
 		public static void GetAllMods() => AllMods = Directory.GetFiles(tConfigWrapper.ModsPath, "*.obj").ToList();
 
-
 		public static void SerializeEnabledMods() => File.WriteAllText(tConfigWrapper.ModsPath + "\\enabled.json", JsonConvert.SerializeObject(EnabledMods, Formatting.Indented));
-
-		public static void SerializePreviousPlayerMods() => File.WriteAllText(tConfigWrapper.ModsPath + "\\prevPlayerMods.json", JsonConvert.SerializeObject(PrevLoadedPlayerMods, Formatting.Indented));
-
-		public static void SerializePreviousWorldMods() => File.WriteAllText(tConfigWrapper.ModsPath + "\\prevWorldMods.json", JsonConvert.SerializeObject(PrevLoadedWorldMods, Formatting.Indented));
 
 		public static void SerializeModPack(string name) => File.WriteAllText(tConfigWrapper.ModsPath + $"\\ModPacks\\{name}.json", JsonConvert.SerializeObject(EnabledMods, Formatting.Indented));
 
@@ -70,16 +60,6 @@ namespace tConfigWrapper.Common {
 				EnabledModsOld = new List<string>();
 		}
 
-		public static void DeserializePrevPlayerMods() {
-			if (File.Exists(tConfigWrapper.ModsPath + "\\prevPlayerMods.json"))
-				PrevLoadedPlayerMods = JsonConvert.DeserializeObject<Dictionary<string, PrevMods>>(File.ReadAllText(tConfigWrapper.ModsPath + "\\prevPlayerMods.json"));
-		}
-
-		public static void DeserializePrevWorldMods() {
-			if (File.Exists(tConfigWrapper.ModsPath + "\\prevWorldMods.json"))
-				PrevLoadedWorldMods = JsonConvert.DeserializeObject<Dictionary<string, PrevMods>>(File.ReadAllText(tConfigWrapper.ModsPath + "\\prevWorldMods.json"));
-		}
-
 		public static void DeserializeModPack(string path) {
 			EnabledMods = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(tConfigWrapper.ModsPath + $"\\{path}"));
 		}
@@ -88,8 +68,6 @@ namespace tConfigWrapper.Common {
 			AllMods = new List<string>();
 			EnabledMods = new List<string>();
 			ChangedMods = new List<string>();
-			PrevLoadedPlayerMods = new Dictionary<string, PrevMods>();
-			PrevLoadedWorldMods = new Dictionary<string, PrevMods>();
 		}
 
 		public static void UnloadStaticFields() {
@@ -97,52 +75,23 @@ namespace tConfigWrapper.Common {
 			EnabledMods = null;
 			EnabledModsOld = null;
 			ChangedMods = null;
-			PrevLoadedPlayerMods = null;
-			PrevLoadedWorldMods = null;
 		}
 	}
 
 	public class SaveLoadedMods : ModPlayer {
-		public override void SetupStartInventory(IList<Item> items, bool mediumcoreDeath) { // Runs on player creation, so that mods are serialized even if you don't enter the world.
-			if (ModState.PrevLoadedPlayerMods.ContainsKey(player.name))
-				ModState.PrevLoadedPlayerMods.Remove(player.name);
-
-			ModState.PrevLoadedPlayerMods.Add(player.name, new PrevMods {
-				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
-			});
-
-			ModState.SerializePreviousPlayerMods();
+		public List<string> usedtConfigMods = new List<string>();
+		public override void Initialize() {
+			usedtConfigMods = new List<string>();
 		}
 
-		public override void OnEnterWorld(Player player) {
-			if (ModState.PrevLoadedPlayerMods.ContainsKey(player.name))
-				ModState.PrevLoadedPlayerMods.Remove(player.name);
-
-			ModState.PrevLoadedPlayerMods.Add(player.name, new PrevMods {
-				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
-			});
-
-			ModState.SerializePreviousPlayerMods();
-
-			if (ModState.PrevLoadedWorldMods.ContainsKey($"{Main.worldID}:{Main.worldName}"))
-				ModState.PrevLoadedWorldMods.Remove($"{Main.worldID}:{Main.worldName}");
-
-			ModState.PrevLoadedWorldMods.Add($"{Main.worldID}:{Main.worldName}", new PrevMods {
-				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
-			});
-			ModState.SerializePreviousWorldMods();
+		public override void Load(TagCompound tag) {
+			usedtConfigMods = (List<string>)tag.GetList<string>("usedtConfigMods");
 		}
-	}
 
-	public class SaveModsOnWorldCreation : ModWorld {
-		public override void ModifyWorldGenTasks(List<GenPass> tasks, ref float totalWeight) { // Runs on world creation, so that mods are serialized even if you don't enter the world.
-			if (ModState.PrevLoadedWorldMods.ContainsKey($"{Main.worldID}:{Main.worldName}"))
-				ModState.PrevLoadedWorldMods.Remove($"{Main.worldID}:{Main.worldName}");
-
-			ModState.PrevLoadedWorldMods.Add($"{Main.worldID}:{Main.worldName}", new PrevMods {
-				PrevEnabledMods = new HashSet<string>(ModState.EnabledMods)
-			});
-			ModState.SerializePreviousWorldMods();
+		public override TagCompound Save() {
+			return new TagCompound {
+				{ "usedtConfigMods", usedtConfigMods }
+			};
 		}
 	}
 }
