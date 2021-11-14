@@ -1,5 +1,3 @@
-displayName = tConfig Wrapper
-author = pollen__
+displayName = tConfigWrapper
+author = ppeb
 version = 0.1
-dllReferences = SevenZipSharp, Gajatko
-includePDB = false
